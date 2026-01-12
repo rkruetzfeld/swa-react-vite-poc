@@ -7,7 +7,7 @@ import "ag-grid-community/styles/ag-theme-quartz.css";
 
 type TopNav = "Dashboard" | "Estimates" | "Reports" | "Settings";
 type View = "EstimatesList" | "EstimateDetail" | "CreateEstimate";
-type Status = "Draft" | "Submitted" | "Approved";
+type Status = "Draft" | "Submitted" | "Approved" | "Completed";
 
 type EstimateHeader = {
   estimateId: string;
@@ -29,8 +29,8 @@ type EstimateLine = {
   notes: string;
 };
 
-const LS_HEADERS = "poc_estimate_headers_v3";
-const LS_LINES_PREFIX = "poc_estimate_lines_v3__";
+const LS_HEADERS = "poc_estimate_headers_v4";
+const LS_LINES_PREFIX = "poc_estimate_lines_v4__";
 
 function uuid(): string {
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
@@ -39,7 +39,6 @@ function nowIso(): string {
   return new Date().toISOString();
 }
 function toIsoDateOnly(d: Date): string {
-  // yyyy-mm-dd in local time
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
   const dd = String(d.getDate()).padStart(2, "0");
@@ -47,14 +46,12 @@ function toIsoDateOnly(d: Date): string {
 }
 function parseDateOnlyToRangeStart(yyyyMmDd: string): Date | null {
   if (!yyyyMmDd) return null;
-  // local midnight
   const [y, m, d] = yyyyMmDd.split("-").map((x) => Number(x));
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d, 0, 0, 0, 0);
 }
 function parseDateOnlyToRangeEnd(yyyyMmDd: string): Date | null {
   if (!yyyyMmDd) return null;
-  // local end of day
   const [y, m, d] = yyyyMmDd.split("-").map((x) => Number(x));
   if (!y || !m || !d) return null;
   return new Date(y, m - 1, d, 23, 59, 59, 999);
@@ -100,25 +97,27 @@ function seedIfEmpty() {
   const existing = loadHeaders();
   if (existing.length > 0) return;
 
-  // helper to make ISO dates
   const d = (y: number, m: number, day: number) => new Date(y, m - 1, day).toISOString();
 
   const headers: EstimateHeader[] = [
     { estimateId: "1574", client: "Custom Solutions Inc.", title: "Estimate Custom Solutions", status: "Draft", dateCreated: d(2024, 9, 3), dueDate: d(2024, 12, 20), lastUpdated: nowIso() },
     { estimateId: "1533", client: "Anting Detiming", title: "Estimated Drops", status: "Submitted", dateCreated: d(2024, 9, 1), dueDate: d(2024, 11, 15), lastUpdated: nowIso() },
     { estimateId: "1535", client: "Supply A", title: "Office X", status: "Approved", dateCreated: d(2024, 9, 2), dueDate: d(2024, 10, 30), lastUpdated: nowIso() },
-    { estimateId: "1523", client: "Custom Sites", title: "Estimate Retire", status: "Draft", dateCreated: d(2023, 7, 7), dueDate: d(2023, 12, 1), lastUpdated: nowIso() },
-    { estimateId: "1643", client: "Committed Dregens", title: "Estimate Started", status: "Submitted", dateCreated: d(2023, 10, 10), dueDate: d(2024, 3, 9), lastUpdated: nowIso() },
-    { estimateId: "0144", client: "Perichen Greet", title: "Pleasee Seatrms", status: "Draft", dateCreated: d(2022, 4, 7), dueDate: d(2022, 5, 31), lastUpdated: nowIso() },
-    { estimateId: "1010", client: "Console Services", title: "Circular Pricing", status: "Approved", dateCreated: d(2023, 9, 9), dueDate: d(2023, 12, 31), lastUpdated: nowIso() },
+
+    // “real-ish” projects
     { estimateId: "2001", client: "Highway 1 Resurfacing", title: "Class D Estimate", status: "Draft", dateCreated: d(2025, 1, 5), dueDate: d(2025, 2, 10), lastUpdated: nowIso() },
     { estimateId: "2002", client: "Bridge Rehab - Segment B", title: "Initial Estimate", status: "Submitted", dateCreated: d(2025, 1, 12), dueDate: d(2025, 2, 15), lastUpdated: nowIso() },
-    { estimateId: "2003", client: "Drainage Improvements", title: "Revised Estimate", status: "Approved", dateCreated: d(2024, 12, 18), dueDate: d(2025, 1, 20), lastUpdated: nowIso() }
+    { estimateId: "2003", client: "Drainage Improvements", title: "Revised Estimate", status: "Approved", dateCreated: d(2024, 12, 18), dueDate: d(2025, 1, 20), lastUpdated: nowIso() },
+
+    // Completed estimates (view/search/edit same as others)
+    { estimateId: "1801", client: "Culvert Replacement - Site 12", title: "Final Estimate", status: "Completed", dateCreated: d(2024, 5, 14), dueDate: d(2024, 6, 30), lastUpdated: nowIso() },
+    { estimateId: "1802", client: "Road Shoulder Widening", title: "As-Built Estimate", status: "Completed", dateCreated: d(2023, 10, 2), dueDate: d(2023, 12, 15), lastUpdated: nowIso() },
+    { estimateId: "1803", client: "Bridge Paint & Rehab", title: "Closeout Estimate", status: "Completed", dateCreated: d(2022, 8, 20), dueDate: d(2022, 10, 1), lastUpdated: nowIso() },
+    { estimateId: "1804", client: "Retaining Wall Repair", title: "Completed Scope", status: "Completed", dateCreated: d(2021, 4, 12), dueDate: d(2021, 6, 1), lastUpdated: nowIso() }
   ];
 
   saveHeaders(headers);
 
-  // Seed line items so Amount column isn't blank
   const seedLines = (estimateId: string, rows: Array<Partial<EstimateLine>>) => {
     saveLines(
       estimateId,
@@ -135,24 +134,15 @@ function seedIfEmpty() {
   };
 
   seedLines("1574", [
-    { item: "1010", description: "Online marketing proposal", uom: "LS", qty: 1, unitRate: 90 },
-    { item: "1020", description: "Mobilization", uom: "LS", qty: 1, unitRate: 12500 },
-    { item: "1030", description: "Traffic control", uom: "day", qty: 12, unitRate: 850 }
-  ]);
-
-  seedLines("1533", [
-    { description: "Engineering review", uom: "LS", qty: 1, unitRate: 3800 },
-    { description: "QA/QC checks", uom: "hr", qty: 24, unitRate: 140 }
-  ]);
-
-  seedLines("1535", [
-    { description: "Materials", uom: "LS", qty: 1, unitRate: 6000 },
-    { description: "Labour", uom: "hr", qty: 40, unitRate: 115 }
+    { item: "1010", description: "Mobilization", uom: "LS", qty: 1, unitRate: 12500 },
+    { item: "1020", description: "Traffic control", uom: "day", qty: 12, unitRate: 850 },
+    { item: "1030", description: "Survey & layout", uom: "LS", qty: 1, unitRate: 3800 }
   ]);
 
   seedLines("2001", [
     { description: "Asphalt paving", uom: "t", qty: 450, unitRate: 145 },
-    { description: "Line painting", uom: "km", qty: 12, unitRate: 1800 }
+    { description: "Line painting", uom: "km", qty: 12, unitRate: 1800 },
+    { description: "Shoulder grading", uom: "km", qty: 8, unitRate: 9500 }
   ]);
 
   seedLines("2002", [
@@ -160,8 +150,26 @@ function seedIfEmpty() {
     { description: "Rebar replacement", uom: "kg", qty: 900, unitRate: 6.5 }
   ]);
 
-  seedLines("2003", [
-    { description: "Culvert install", uom: "ea", qty: 2, unitRate: 22000 }
+  seedLines("1801", [
+    { description: "Culvert supply", uom: "ea", qty: 1, unitRate: 42000, notes: "Delivered" },
+    { description: "Excavation & install", uom: "LS", qty: 1, unitRate: 28500, notes: "Completed" },
+    { description: "Backfill & compaction", uom: "LS", qty: 1, unitRate: 9800, notes: "Completed" }
+  ]);
+
+  seedLines("1802", [
+    { description: "Granular base", uom: "t", qty: 620, unitRate: 42 },
+    { description: "Paving (wear course)", uom: "t", qty: 300, unitRate: 155 }
+  ]);
+
+  seedLines("1803", [
+    { description: "Containment setup", uom: "LS", qty: 1, unitRate: 12000 },
+    { description: "Surface prep", uom: "m2", qty: 850, unitRate: 28 },
+    { description: "Coating system", uom: "m2", qty: 850, unitRate: 35 }
+  ]);
+
+  seedLines("1804", [
+    { description: "Concrete patch", uom: "m2", qty: 60, unitRate: 320 },
+    { description: "Drainage improvements", uom: "LS", qty: 1, unitRate: 7800 }
   ]);
 }
 
@@ -171,23 +179,33 @@ export default function App() {
     return null;
   }, []);
 
-  // responsive state
-  const [isNarrow, setIsNarrow] = useState<boolean>(() => window.innerWidth < 900);
+  // breakpoints: iPhone-ish, tablet, small desktop, large desktop
+  const [vp, setVp] = useState(() => ({
+    w: window.innerWidth,
+    h: window.innerHeight
+  }));
+
   useEffect(() => {
-    const onResize = () => setIsNarrow(window.innerWidth < 900);
+    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => window.innerWidth >= 900);
+  const isPhone = vp.w <= 480;
+  const isTablet = vp.w > 480 && vp.w <= 768;
+  const isSmallDesktop = vp.w > 768 && vp.w < 1400;
+  const isLargeDesktop = vp.w >= 1400;
+
+  // Sidebar behavior:
+  // - phone/tablet: drawer
+  // - desktop: always visible
+  const isDrawer = isPhone || isTablet;
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
 
   useEffect(() => {
-    // Auto-collapse sidebar on narrow screens
-    if (isNarrow) setSidebarOpen(false);
-    else setSidebarOpen(true);
-  }, [isNarrow]);
+    setSidebarOpen(!isDrawer);
+  }, [isDrawer]);
 
-  // app state
   const [topNav, setTopNav] = useState<TopNav>("Estimates");
   const [view, setView] = useState<View>("EstimatesList");
 
@@ -211,10 +229,12 @@ export default function App() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | Status>("All");
 
-  // Default date range: last 365 days (for a nicer PoC feel)
+  // Default date range:
+  // - desktop: 2 years
+  // - phone: 1 year (less scrolling)
   const [fromDate, setFromDate] = useState<string>(() => {
     const d = new Date();
-    d.setDate(d.getDate() - 365);
+    d.setDate(d.getDate() - (isPhone ? 365 : 730));
     return toIsoDateOnly(d);
   });
   const [toDate, setToDate] = useState<string>(() => toIsoDateOnly(new Date()));
@@ -241,9 +261,9 @@ export default function App() {
     return lines.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0), 0);
   }, [lines]);
 
-  function updateHeaderLastUpdated(estimateId: string) {
+  function updateHeader(estimateId: string, patch: Partial<EstimateHeader>) {
     const updated = headers.map((h) =>
-      h.estimateId === estimateId ? { ...h, lastUpdated: nowIso() } : h
+      h.estimateId === estimateId ? { ...h, ...patch, lastUpdated: nowIso() } : h
     );
     setHeaders(updated);
     saveHeaders(updated);
@@ -254,13 +274,13 @@ export default function App() {
     setLines(loadLines(id));
     setView("EstimateDetail");
     setTopNav("Estimates");
-    if (isNarrow) setSidebarOpen(false);
+    if (isDrawer) setSidebarOpen(false);
   }
 
   function saveCurrentEstimate() {
     if (!selectedEstimateId) return;
     saveLines(selectedEstimateId, lines);
-    updateHeaderLastUpdated(selectedEstimateId);
+    updateHeader(selectedEstimateId, {});
     alert("Saved (localStorage).");
   }
 
@@ -279,24 +299,26 @@ export default function App() {
       dueDate: nowIso(),
       lastUpdated: nowIso()
     };
+
     const updated = [header, ...headers];
     setHeaders(updated);
     saveHeaders(updated);
+
     saveLines(id, []);
     setSelectedEstimateId(id);
     setLines([]);
     setNewClient("");
     setNewTitle("");
     setView("EstimateDetail");
-    if (isNarrow) setSidebarOpen(false);
+    if (isDrawer) setSidebarOpen(false);
   }
 
-  // grids
+  // Grid columns
   const estimatesListCols = useMemo<ColDef<EstimateHeader>[]>(() => {
     return [
       { field: "estimateId", headerName: "ID", width: 90 },
-      { field: "client", headerName: "Client", flex: 1, minWidth: 180 },
-      { field: "title", headerName: "Title", flex: 1, minWidth: 200 },
+      { field: "client", headerName: "Client", flex: 1, minWidth: 200 },
+      { field: "title", headerName: "Title", flex: 1, minWidth: 220 },
       {
         field: "dateCreated",
         headerName: "Date Created",
@@ -306,22 +328,21 @@ export default function App() {
       {
         field: "status",
         headerName: "Status",
-        width: 120,
+        width: 130,
         cellRenderer: (p: any) => {
           const v = p.value as Status;
-          const bg = v === "Draft" ? "#e0f2fe" : v === "Submitted" ? "#fef3c7" : "#dcfce7";
-          const fg = v === "Draft" ? "#075985" : v === "Submitted" ? "#92400e" : "#166534";
+          const { bg, fg } = statusColors(v);
           return `<span style="
               display:inline-flex;align-items:center;
               padding:3px 8px;border-radius:999px;
-              font-weight:800;font-size:12px;
+              font-weight:900;font-size:12px;
               background:${bg};color:${fg};
             ">${v}</span>`;
         }
       },
       {
         headerName: "Amount",
-        width: 140,
+        width: 150,
         valueGetter: (p) => {
           const id = p.data?.estimateId;
           if (!id) return 0;
@@ -342,7 +363,7 @@ export default function App() {
   const estimateDetailCols = useMemo<ColDef<EstimateLine>[]>(() => {
     return [
       { field: "item", headerName: "Item", editable: true, width: 90 },
-      { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 260 },
+      { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 300 },
       { field: "uom", headerName: "UOM", editable: true, width: 90 },
       {
         field: "qty",
@@ -361,7 +382,7 @@ export default function App() {
       },
       {
         headerName: "Total",
-        width: 140,
+        width: 150,
         valueGetter: (p) => (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0),
         valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0)
       },
@@ -393,7 +414,14 @@ export default function App() {
     api.exportDataAsCsv({ fileName });
   }
 
-  // Shared UI styles (with responsive CSS)
+  // Status colors (light theme)
+  function statusColors(s: Status): { bg: string; fg: string } {
+    if (s === "Draft") return { bg: "#e0f2fe", fg: "#075985" };
+    if (s === "Submitted") return { bg: "#fef3c7", fg: "#92400e" };
+    if (s === "Approved") return { bg: "#dcfce7", fg: "#166534" };
+    return { bg: "#e5e7eb", fg: "#111827" }; // Completed
+  }
+
   const styles = `
     :root {
       --bg: #f3f6fb;
@@ -403,7 +431,7 @@ export default function App() {
       --muted: #64748b;
       --primary: #2563eb;
       --primarySoft: #eef2ff;
-      --shadow: 0 8px 20px rgba(15, 23, 42, 0.06);
+      --shadow: 0 10px 22px rgba(15, 23, 42, 0.06);
     }
 
     html, body, #root { height: 100%; }
@@ -415,6 +443,8 @@ export default function App() {
       display: grid;
       grid-template-rows: 56px 1fr;
       font-family: system-ui, Segoe UI, Arial;
+      min-width: 0;
+      min-height: 0;
     }
 
     .topbar {
@@ -424,6 +454,13 @@ export default function App() {
       align-items: center;
       justify-content: space-between;
       padding: 0 14px;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .leftTop {
+      display: flex;
+      align-items: center;
       gap: 12px;
       min-width: 0;
     }
@@ -446,21 +483,31 @@ export default function App() {
       cursor: pointer;
     }
 
-    .topnav { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .topnav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+      overflow: auto;
+    }
     .topnav-item {
       padding: 8px 10px;
       border-radius: 8px;
       cursor: pointer;
       font-size: 13px;
-      font-weight: 800;
+      font-weight: 900;
       color: #334155;
       white-space: nowrap;
     }
     .topnav-item.active { color: #1d4ed8; background: var(--primarySoft); }
 
+    /* Main layout:
+       - desktop: sidebar + content
+       - large desktop: slightly wider sidebar and content breathing room
+    */
     .main {
       display: grid;
-      grid-template-columns: 240px 1fr;
+      grid-template-columns: ${isLargeDesktop ? "280px 1fr" : "250px 1fr"};
       min-height: 0;
       min-width: 0;
     }
@@ -476,7 +523,7 @@ export default function App() {
       padding: 10px 10px;
       border-radius: 10px;
       cursor: pointer;
-      font-weight: 800;
+      font-weight: 900;
       font-size: 13px;
       color: #334155;
       margin-bottom: 6px;
@@ -484,12 +531,17 @@ export default function App() {
     .side-item.active { color: #1d4ed8; background: var(--primarySoft); }
 
     .content {
-      padding: 16px;
+      padding: ${isLargeDesktop ? "18px 22px" : "14px 16px"};
       min-height: 0;
       min-width: 0;
+
+      /* key: allow children to use height and fill the screen */
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
     }
 
-    .page-header {
+    .pageHeader {
       display: flex;
       justify-content: space-between;
       align-items: center;
@@ -497,13 +549,17 @@ export default function App() {
       flex-wrap: wrap;
     }
 
-    .title { font-size: 22px; font-weight: 900; margin: 2px 0 10px 0; }
+    .title { font-size: 22px; font-weight: 900; margin: 0; }
 
     .card {
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 14px;
       box-shadow: var(--shadow);
+
+      /* key: card can expand */
+      min-height: 0;
+      min-width: 0;
     }
 
     .btn-primary {
@@ -530,14 +586,6 @@ export default function App() {
       white-space: nowrap;
     }
 
-    .filters {
-      display: grid;
-      grid-template-columns: 1fr 160px 160px 160px auto;
-      gap: 10px;
-      align-items: center;
-      margin-bottom: 10px;
-    }
-
     .input, .select {
       width: 100%;
       padding: 10px 12px;
@@ -545,13 +593,39 @@ export default function App() {
       border: 1px solid #d1d5db;
       outline: none;
       background: white;
-      font-weight: 700;
+      font-weight: 800;
       color: #0f172a;
     }
 
     .subtle { font-size: 12px; color: var(--muted); }
 
-    .detail-header {
+    /* Filters: desktop uses a wider grid, large desktop uses more columns */
+    .filters {
+      display: grid;
+      grid-template-columns: ${isLargeDesktop
+        ? "minmax(260px, 1fr) 200px 180px 180px auto"
+        : "minmax(220px, 1fr) 180px 160px 160px auto"};
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* List page layout: filters + grid fill remaining height */
+    .listCard {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+      min-height: 0;
+    }
+    .gridWrap {
+      flex: 1;
+      min-height: 360px;
+      min-width: 0;
+    }
+
+    /* Detail page: header + summary + grid fill remaining height */
+    .detailHeader {
       display: flex;
       justify-content: space-between;
       align-items: flex-start;
@@ -559,15 +633,40 @@ export default function App() {
       flex-wrap: wrap;
     }
 
-    .summary-grid {
+    .summaryGrid {
       display: grid;
       grid-template-columns: repeat(3, minmax(180px, 1fr));
       gap: 12px;
-      margin-top: 12px;
     }
 
-    /* Narrow / mobile */
-    @media (max-width: 900px) {
+    .detailCard {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      flex: 1;
+      min-height: 0;
+    }
+
+    .detailToolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 8px;
+      border-radius: 999px;
+      font-weight: 900;
+      font-size: 12px;
+    }
+
+    /* Drawer behavior for phone/tablet */
+    @media (max-width: 768px) {
       .hamburger { display: inline-flex; }
       .main { grid-template-columns: 1fr; }
 
@@ -576,7 +675,7 @@ export default function App() {
         top: 56px;
         left: 0;
         bottom: 0;
-        width: 260px;
+        width: 270px;
         z-index: 20;
         transform: translateX(-110%);
         transition: transform 180ms ease;
@@ -596,44 +695,17 @@ export default function App() {
 
       .content { padding: 12px; }
 
-      .filters {
-        grid-template-columns: 1fr 1fr;
-      }
+      .filters { grid-template-columns: 1fr 1fr; }
 
-      .summary-grid {
-        grid-template-columns: 1fr;
-      }
+      .summaryGrid { grid-template-columns: 1fr; }
+
+      .gridWrap { min-height: 420px; } /* phone: keep grid usable */
+    }
+
+    @media (max-width: 480px) {
+      .filters { grid-template-columns: 1fr; }
     }
   `;
-
-  const statusPillStyle = (status: Status): React.CSSProperties => {
-    let bg = "#e5e7eb";
-    let fg = "#111827";
-    if (status === "Draft") {
-      bg = "#e0f2fe";
-      fg = "#075985";
-    } else if (status === "Submitted") {
-      bg = "#fef3c7";
-      fg = "#92400e";
-    } else {
-      bg = "#dcfce7";
-      fg = "#166534";
-    }
-    return {
-      display: "inline-flex",
-      alignItems: "center",
-      padding: "3px 8px",
-      borderRadius: 999,
-      background: bg,
-      color: fg,
-      fontWeight: 900,
-      fontSize: 12
-    };
-  };
-
-  // Height calculations: make grids fill the viewport sensibly
-  const listGridHeight = isNarrow ? "calc(100vh - 56px - 16px - 54px - 16px - 140px)" : "calc(100vh - 56px - 16px - 54px - 16px - 96px)";
-  const detailGridHeight = isNarrow ? "calc(100vh - 56px - 16px - 140px - 180px)" : "calc(100vh - 56px - 16px - 110px - 110px)";
 
   return (
     <>
@@ -642,7 +714,7 @@ export default function App() {
       <div className="app">
         {/* Top bar */}
         <div className="topbar">
-          <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+          <div className="leftTop">
             <button
               className="hamburger"
               onClick={() => setSidebarOpen((v) => !v)}
@@ -656,7 +728,7 @@ export default function App() {
               <div>Portal</div>
             </div>
 
-            <div className="topnav" style={{ overflow: "auto" }}>
+            <div className="topnav">
               {(["Dashboard", "Estimates", "Reports", "Settings"] as TopNav[]).map((t) => (
                 <div
                   key={t}
@@ -664,8 +736,8 @@ export default function App() {
                   onClick={() => {
                     setTopNav(t);
                     if (t === "Estimates") setView("EstimatesList");
-                    else setView("EstimatesList"); // keep PoC simple
-                    if (isNarrow) setSidebarOpen(false);
+                    else setView("EstimatesList");
+                    if (isDrawer) setSidebarOpen(false);
                   }}
                 >
                   {t}
@@ -675,7 +747,7 @@ export default function App() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, color: "#334155" }}>
-            <div style={{ fontSize: 13, fontWeight: 800, whiteSpace: "nowrap" }}>
+            <div style={{ fontSize: 13, fontWeight: 900, whiteSpace: "nowrap" }}>
               Welcome, John
             </div>
             <div
@@ -697,8 +769,10 @@ export default function App() {
 
         {/* Main */}
         <div className="main">
-          {/* Mobile overlay */}
-          {isNarrow && sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
+          {/* Overlay for drawer */}
+          {isDrawer && sidebarOpen && (
+            <div className="overlay" onClick={() => setSidebarOpen(false)} />
+          )}
 
           {/* Sidebar */}
           <div className={`sidebar ${sidebarOpen ? "open" : ""}`}>
@@ -707,7 +781,7 @@ export default function App() {
               onClick={() => {
                 setTopNav("Dashboard");
                 setView("EstimatesList");
-                if (isNarrow) setSidebarOpen(false);
+                if (isDrawer) setSidebarOpen(false);
               }}
             >
               ▢ Dashboard
@@ -718,7 +792,7 @@ export default function App() {
               onClick={() => {
                 setTopNav("Estimates");
                 setView("EstimatesList");
-                if (isNarrow) setSidebarOpen(false);
+                if (isDrawer) setSidebarOpen(false);
               }}
             >
               ▦ Estimates
@@ -746,9 +820,8 @@ export default function App() {
             {/* Estimates List */}
             {view === "EstimatesList" && (
               <>
-                <div className="page-header">
+                <div className="pageHeader">
                   <div className="title">Estimates</div>
-
                   <button
                     className="btn-primary"
                     onClick={() => setView("CreateEstimate")}
@@ -757,13 +830,13 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="card" style={{ padding: 12 }}>
+                <div className="card listCard">
                   <div className="filters">
                     <input
                       className="input"
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      placeholder="Search..."
+                      placeholder="Search… (client, title, ID, status)"
                     />
 
                     <select
@@ -776,6 +849,7 @@ export default function App() {
                       <option value="Draft">Draft</option>
                       <option value="Submitted">Submitted</option>
                       <option value="Approved">Approved</option>
+                      <option value="Completed">Completed</option>
                     </select>
 
                     <input
@@ -800,7 +874,7 @@ export default function App() {
                         setSearch("");
                         setStatusFilter("All");
                         const d = new Date();
-                        d.setDate(d.getDate() - 365);
+                        d.setDate(d.getDate() - (isPhone ? 365 : 730));
                         setFromDate(toIsoDateOnly(d));
                         setToDate(toIsoDateOnly(new Date()));
                       }}
@@ -809,22 +883,24 @@ export default function App() {
                     </button>
                   </div>
 
-                  <div className="ag-theme-quartz" style={{ height: listGridHeight, minHeight: 360 }}>
-                    <AgGridReact<EstimateHeader>
-                      rowData={filteredHeaders}
-                      columnDefs={estimatesListCols}
-                      defaultColDef={{ resizable: true, sortable: true, filter: true }}
-                      rowSelection="single"
-                      onGridReady={(e) => (listApiRef.current = e.api)}
-                      onRowClicked={(e: RowClickedEvent<EstimateHeader>) => {
-                        const id = e.data?.estimateId;
-                        if (id) openEstimate(id);
-                      }}
-                    />
+                  <div className="gridWrap">
+                    <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
+                      <AgGridReact<EstimateHeader>
+                        rowData={filteredHeaders}
+                        columnDefs={estimatesListCols}
+                        defaultColDef={{ resizable: true, sortable: true, filter: true }}
+                        rowSelection="single"
+                        onGridReady={(e) => (listApiRef.current = e.api)}
+                        onRowClicked={(e: RowClickedEvent<EstimateHeader>) => {
+                          const id = e.data?.estimateId;
+                          if (id) openEstimate(id);
+                        }}
+                      />
+                    </div>
                   </div>
 
-                  <div className="subtle" style={{ paddingTop: 10 }}>
-                    Click a row to open the estimate detail. Amount is calculated from stored line items.
+                  <div className="subtle">
+                    Tip: Filter by **Completed** to see closed-out estimates. Click any row to open and edit.
                   </div>
                 </div>
               </>
@@ -833,14 +909,14 @@ export default function App() {
             {/* Create Estimate */}
             {view === "CreateEstimate" && (
               <>
-                <div className="page-header">
+                <div className="pageHeader">
                   <div className="title">Create Estimate</div>
                   <button className="btn-ghost" onClick={() => setView("EstimatesList")}>
                     Back
                   </button>
                 </div>
 
-                <div className="card" style={{ padding: 14, maxWidth: 760 }}>
+                <div className="card" style={{ padding: 14, maxWidth: isSmallDesktop ? 880 : 980 }}>
                   <div style={{ display: "grid", gap: 12 }}>
                     <div style={{ display: "grid", gap: 6 }}>
                       <div style={{ fontWeight: 900, fontSize: 13 }}>Client</div>
@@ -848,7 +924,7 @@ export default function App() {
                         className="input"
                         value={newClient}
                         onChange={(e) => setNewClient(e.target.value)}
-                        placeholder="Custom Solutions Inc."
+                        placeholder="Example: Bridge Rehab - Segment B"
                       />
                     </div>
 
@@ -858,7 +934,7 @@ export default function App() {
                         className="input"
                         value={newTitle}
                         onChange={(e) => setNewTitle(e.target.value)}
-                        placeholder="Estimate Starter"
+                        placeholder="Example: Initial Estimate"
                       />
                     </div>
 
@@ -880,31 +956,32 @@ export default function App() {
             {/* Estimate Detail */}
             {view === "EstimateDetail" && selectedHeader && (
               <>
-                <div className="detail-header">
+                <div className="detailHeader">
                   <div style={{ display: "grid", gap: 4 }}>
                     <div style={{ fontSize: 13, color: "#64748b", fontWeight: 900 }}>
                       ID {selectedHeader.estimateId}
                     </div>
                     <div style={{ fontSize: 22, fontWeight: 900 }}>{selectedHeader.client}</div>
-                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 800 }}>
+                    <div style={{ fontSize: 13, color: "#334155", fontWeight: 900 }}>
                       {selectedHeader.title}
                     </div>
                   </div>
 
-                  <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
                     <div style={{ textAlign: "right" }}>
                       <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Total</div>
                       <div style={{ fontSize: 22, fontWeight: 900 }}>
                         {formatCurrencyCAD(estimateTotal)}
                       </div>
                     </div>
+
                     <button className="btn-ghost" onClick={() => setView("EstimatesList")}>
                       Back
                     </button>
                   </div>
                 </div>
 
-                <div className="summary-grid">
+                <div className="summaryGrid">
                   <div className="card" style={{ padding: 12 }}>
                     <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Estimate Date</div>
                     <div style={{ fontSize: 14, fontWeight: 900 }}>{formatDate(selectedHeader.dateCreated)}</div>
@@ -917,14 +994,35 @@ export default function App() {
 
                   <div className="card" style={{ padding: 12 }}>
                     <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Status</div>
-                    <div style={{ marginTop: 6 }}>
-                      <span style={statusPillStyle(selectedHeader.status)}>{selectedHeader.status}</span>
+                    <div style={{ display: "flex", gap: 10, alignItems: "center", marginTop: 6, flexWrap: "wrap" }}>
+                      <span
+                        className="pill"
+                        style={{
+                          background: statusColors(selectedHeader.status).bg,
+                          color: statusColors(selectedHeader.status).fg
+                        }}
+                      >
+                        {selectedHeader.status}
+                      </span>
+
+                      <select
+                        className="select"
+                        style={{ width: 180 }}
+                        value={selectedHeader.status}
+                        onChange={(e) => updateHeader(selectedHeader.estimateId, { status: e.target.value as Status })}
+                        title="Change status"
+                      >
+                        <option value="Draft">Draft</option>
+                        <option value="Submitted">Submitted</option>
+                        <option value="Approved">Approved</option>
+                        <option value="Completed">Completed</option>
+                      </select>
                     </div>
                   </div>
                 </div>
 
-                <div className="card" style={{ padding: 12, marginTop: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 10 }}>
+                <div className="card detailCard">
+                  <div className="detailToolbar">
                     <div style={{ fontWeight: 900 }}>Estimate Line Items</div>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                       <button className="btn-ghost" onClick={exportDetailCsv}>Export</button>
@@ -934,22 +1032,24 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="ag-theme-quartz" style={{ height: detailGridHeight, minHeight: 360 }}>
-                    <AgGridReact<EstimateLine>
-                      rowData={lines}
-                      columnDefs={estimateDetailCols}
-                      defaultColDef={{ resizable: true, sortable: true, filter: true }}
-                      rowSelection="multiple"
-                      getRowId={(p) => p.data.lineId}
-                      singleClickEdit={true}
-                      stopEditingWhenCellsLoseFocus={true}
-                      onGridReady={(e) => (detailApiRef.current = e.api)}
-                      onCellValueChanged={() => updateHeaderLastUpdated(selectedHeader.estimateId)}
-                    />
+                  <div className="gridWrap">
+                    <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
+                      <AgGridReact<EstimateLine>
+                        rowData={lines}
+                        columnDefs={estimateDetailCols}
+                        defaultColDef={{ resizable: true, sortable: true, filter: true }}
+                        rowSelection="multiple"
+                        getRowId={(p) => p.data.lineId}
+                        singleClickEdit={true}
+                        stopEditingWhenCellsLoseFocus={true}
+                        onGridReady={(e) => (detailApiRef.current = e.api)}
+                        onCellValueChanged={() => updateHeader(selectedHeader.estimateId, {})}
+                      />
+                    </div>
                   </div>
 
-                  <div className="subtle" style={{ paddingTop: 10 }}>
-                    Edit Qty/Price to update totals. Click Save to persist (localStorage).
+                  <div className="subtle">
+                    Completed estimates are still editable in this PoC (front-end only). Later we can lock editing based on status.
                   </div>
                 </div>
               </>
