@@ -34,25 +34,25 @@ jobs:
       - name: Build (Vite)
         run: npm run build
 
-      - name: Deploy to Azure Static Web Apps (upload prebuilt)
-        id: builddeploy
+       - name: Deploy to Azure Static Web Apps (prebuilt Vite)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
 
-          # App is at repo root
+          # Source repo root (only for config)
           app_location: "/"
 
-          # We have no API
+          # No API
           api_location: ""
 
-          # IMPORTANT: prevent Oryx from building with Node 18
+          # Do NOT let Oryx build
           skip_app_build: true
 
-          # IMPORTANT: tell SWA where the built files are
+          # THIS is what gets served
           app_artifact_location: "dist"
+
 
       - name: Cleanup git extraheader (best-effort)
         if: always()
