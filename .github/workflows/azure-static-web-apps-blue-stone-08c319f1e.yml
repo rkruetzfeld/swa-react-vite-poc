@@ -14,31 +14,46 @@ jobs:
     if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
     runs-on: ubuntu-latest
     name: Build and Deploy Job
+
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
         with:
           submodules: true
           lfs: false
 
-      # Force Node 20+ so Vite can build (SWA/Oryx otherwise uses Node 18)
-      - name: Use Node.js 20
+      - name: Use Node.js 20.19.6
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "20.19.6"
           cache: "npm"
 
-      - name: Build And Deploy
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build (Vite)
+        run: npm run build
+
+      - name: Deploy to Azure Static Web Apps (upload prebuilt)
         id: builddeploy
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
-          repo_token: ${{ secrets.GITHUB_TOKEN }} # Used for Github integrations (i.e. PR comments)
+          repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "/" # App source code path
-          api_location: "" # Api source code path - optional
-          output_location: "dist" # Built app content directory - optional
 
-      # Optional: quiet the harmless "extraheader" cleanup warning
+          # App is at repo root
+          app_location: "/"
+
+          # We have no API
+          api_location: ""
+
+          # IMPORTANT: prevent Oryx from building with Node 18
+          skip_app_build: true
+
+          # IMPORTANT: tell SWA where the built files are
+          app_artifact_location: "dist"
+
       - name: Cleanup git extraheader (best-effort)
         if: always()
         shell: bash
