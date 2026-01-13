@@ -1,12 +1,23 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
+import type {
+  ColDef,
+  GridApi,
+  RowClickedEvent,
+  ValueParserParams
+} from "ag-grid-community";
 
 import type { EstimateHeader, EstimateLine, ItemCatalog, Status } from "./models/estimateModels";
 import { estimateDataService } from "./services/estimateDataService";
 
 const PAGE_SIZE = 20;
 const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
+
+type TopTab = "Forms" | "Reports" | "Dashboards";
+type FormsPage = "Estimates" | "Forecast";
+type View = "EstimatesList" | "EstimateDetail" | "Forecast";
+
+type PinKey = `Forms:${FormsPage}`;
 
 function uuid(): string {
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
@@ -83,6 +94,21 @@ function StatusPill(props: { value: Status }) {
   );
 }
 
+function loadPins(): Set<PinKey> {
+  try {
+    const raw = localStorage.getItem("pinnedLinks");
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw) as string[];
+    return new Set(arr.filter((x) => typeof x === "string") as PinKey[]);
+  } catch {
+    return new Set();
+  }
+}
+
+function savePins(pins: Set<PinKey>) {
+  localStorage.setItem("pinnedLinks", JSON.stringify(Array.from(pins.values())));
+}
+
 export default function App() {
   // viewport
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
@@ -100,6 +126,55 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
   useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
 
+  // top nav
+  const [topTab, setTopTab] = useState<TopTab>("Forms");
+  const [formsPage, setFormsPage] = useState<FormsPage>("Estimates");
+
+  // view within Forms
+  const [view, setView] = useState<View>("EstimatesList");
+
+  // pinned shortcuts
+  const [pins, setPins] = useState<Set<PinKey>>(() => loadPins());
+  useEffect(() => savePins(pins), [pins]);
+
+  function togglePin(key: PinKey) {
+    setPins((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }
+
+  const pinnedForms = useMemo(() => {
+    const entries: { key: PinKey; label: string; action: () => void }[] = [];
+    if (pins.has("Forms:Estimates")) {
+      entries.push({
+        key: "Forms:Estimates",
+        label: "Estimates",
+        action: () => {
+          setTopTab("Forms");
+          setFormsPage("Estimates");
+          setView("EstimatesList");
+          if (isDrawer) setSidebarOpen(false);
+        }
+      });
+    }
+    if (pins.has("Forms:Forecast")) {
+      entries.push({
+        key: "Forms:Forecast",
+        label: "Forecast",
+        action: () => {
+          setTopTab("Forms");
+          setFormsPage("Forecast");
+          setView("Forecast");
+          if (isDrawer) setSidebarOpen(false);
+        }
+      });
+    }
+    return entries;
+  }, [pins, isDrawer]);
+
   // runtime data
   const [headers, setHeaders] = useState<EstimateHeader[]>([]);
   const [items, setItems] = useState<ItemCatalog[]>([]);
@@ -112,7 +187,6 @@ export default function App() {
   const [error, setError] = useState<string | null>(null);
 
   const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(null);
-  const [view, setView] = useState<"EstimatesList" | "EstimateDetail">("EstimatesList");
 
   const listApiRef = useRef<GridApi | null>(null);
   const detailApiRef = useRef<GridApi | null>(null);
@@ -326,6 +400,33 @@ export default function App() {
     if (isDrawer) setSidebarOpen(false);
   }
 
+  function updateEstimateStatus(id: string, newStatus: Status) {
+    const now = new Date().toISOString();
+    setHeaders((prev) =>
+      prev.map((h) =>
+        h.estimateId === id
+          ? {
+              ...h,
+              status: newStatus,
+              lastUpdated: now
+            }
+          : h
+      )
+    );
+  }
+
+  function submitEstimate() {
+    if (!selectedEstimateId) return;
+    updateEstimateStatus(selectedEstimateId, "Submitted");
+    setView("EstimatesList");
+  }
+
+  function returnToDraft() {
+    if (!selectedEstimateId) return;
+    updateEstimateStatus(selectedEstimateId, "Draft");
+    setView("EstimatesList");
+  }
+
   const filteredHeaders = useMemo(() => {
     const q = search.trim().toLowerCase();
     const from = parseDateOnlyToRangeStart(fromDate);
@@ -364,6 +465,12 @@ export default function App() {
       {
         field: "dueDate",
         headerName: "Due Date",
+        width: 120,
+        valueFormatter: (p) => formatDate(String(p.value || ""))
+      },
+      {
+        field: "lastUpdated",
+        headerName: "Updated",
         width: 120,
         valueFormatter: (p) => formatDate(String(p.value || ""))
       }
@@ -448,8 +555,33 @@ export default function App() {
     ];
   }, [estimateTotal, itemCodes, itemByCode]);
 
+  // navigation helpers
+  function goFormsEstimates() {
+    setTopTab("Forms");
+    setFormsPage("Estimates");
+    setView("EstimatesList");
+    if (isDrawer) setSidebarOpen(false);
+  }
+
+  function goFormsForecast() {
+    setTopTab("Forms");
+    setFormsPage("Forecast");
+    setView("Forecast");
+    if (isDrawer) setSidebarOpen(false);
+  }
+
+  const headerTitle = useMemo(() => {
+    if (topTab === "Reports") return "Reports (PoC)";
+    if (topTab === "Dashboards") return "Dashboards (PoC)";
+    // Forms
+    if (view === "EstimateDetail" && selectedHeader) return `Estimate ${selectedHeader.estimateId}`;
+    if (view === "Forecast") return "Forecast (PoC)";
+    return "Estimates";
+  }, [topTab, view, selectedHeader]);
+
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      {/* Top bar */}
       <div
         style={{
           padding: 10,
@@ -458,17 +590,62 @@ export default function App() {
           display: "flex",
           justifyContent: "space-between",
           alignItems: "center",
-          gap: 10
+          gap: 10,
+          flexWrap: "wrap"
         }}
       >
-        <div>Portal PoC — Runtime JSON data</div>
-        {view === "EstimatesList" && (
-          <button style={{ fontWeight: 900 }} onClick={createEstimate} disabled={loadingItems || loadingHeaders}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ fontWeight: 950 }}>Portal PoC</div>
+
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button
+              style={{ fontWeight: 900, padding: "8px 10px" }}
+              onClick={() => setTopTab("Forms")}
+            >
+              Forms
+            </button>
+            <button
+              style={{ fontWeight: 900, padding: "8px 10px" }}
+              onClick={() => setTopTab("Reports")}
+            >
+              Reports
+            </button>
+            <button
+              style={{ fontWeight: 900, padding: "8px 10px" }}
+              onClick={() => setTopTab("Dashboards")}
+            >
+              Dashboards
+            </button>
+          </div>
+
+          <div style={{ fontWeight: 900, color: "#334155" }}>{headerTitle}</div>
+        </div>
+
+        {/* Pinned shortcuts in header */}
+        {topTab === "Forms" && pinnedForms.length > 0 && (
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Pinned:</div>
+            {pinnedForms.map((p) => (
+              <button key={p.key} style={{ fontWeight: 900, padding: "8px 10px" }} onClick={p.action}>
+                {p.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Right-side action */}
+        {topTab === "Forms" && view === "EstimatesList" && (
+          <button
+            style={{ fontWeight: 900, padding: "8px 10px" }}
+            onClick={createEstimate}
+            disabled={loadingItems || loadingHeaders}
+          >
             Create Estimate
           </button>
         )}
       </div>
 
+      {/* error */}
       {error && (
         <div style={{ padding: 10, background: "#fee2e2", borderBottom: "1px solid #fecaca", fontWeight: 900 }}>
           Error: {error}
@@ -478,32 +655,116 @@ export default function App() {
         </div>
       )}
 
+      {/* layout */}
       <div
         style={{
           flex: 1,
           minHeight: 0,
           display: "grid",
-          gridTemplateColumns: isDrawer ? "1fr" : "280px 1fr"
+          gridTemplateColumns: isDrawer ? "1fr" : "300px 1fr"
         }}
       >
+        {/* Sidebar */}
         {!isDrawer || sidebarOpen ? (
-          <div style={{ borderRight: isDrawer ? "none" : "1px solid #e5e7eb", padding: 10 }}>
+          <div style={{ borderRight: isDrawer ? "none" : "1px solid #e5e7eb", padding: 10, minHeight: 0, overflow: "auto" }}>
             {isDrawer && (
               <button style={{ marginBottom: 10, padding: "8px 10px", fontWeight: 900 }} onClick={() => setSidebarOpen(false)}>
                 Close
               </button>
             )}
 
-            <button style={{ width: "100%", padding: "10px 12px", fontWeight: 900, marginBottom: 8 }} onClick={() => setView("EstimatesList")}>
-              Estimates
-            </button>
-
-            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
-              Data files: <code>/public/sample-data</code>
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900, marginBottom: 6 }}>Top level</div>
+            <div style={{ display: "grid", gap: 8, marginBottom: 14 }}>
+              <button style={{ width: "100%", padding: "10px 12px", fontWeight: 900 }} onClick={() => setTopTab("Forms")}>
+                Forms
+              </button>
+              <button style={{ width: "100%", padding: "10px 12px", fontWeight: 900 }} onClick={() => setTopTab("Reports")}>
+                Reports
+              </button>
+              <button style={{ width: "100%", padding: "10px 12px", fontWeight: 900 }} onClick={() => setTopTab("Dashboards")}>
+                Dashboards
+              </button>
             </div>
+
+            {topTab === "Forms" && (
+              <>
+                <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900, marginBottom: 6 }}>Forms</div>
+
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+                    <button
+                      style={{ width: "100%", padding: "10px 12px", fontWeight: 900 }}
+                      onClick={goFormsEstimates}
+                    >
+                      Estimates
+                    </button>
+                    <button
+                      title={pins.has("Forms:Estimates") ? "Unpin" : "Pin"}
+                      style={{ padding: "10px 12px", fontWeight: 900 }}
+                      onClick={() => togglePin("Forms:Estimates")}
+                    >
+                      {pins.has("Forms:Estimates") ? "★" : "☆"}
+                    </button>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr auto", gap: 8 }}>
+                    <button
+                      style={{ width: "100%", padding: "10px 12px", fontWeight: 900 }}
+                      onClick={goFormsForecast}
+                    >
+                      Forecast
+                    </button>
+                    <button
+                      title={pins.has("Forms:Forecast") ? "Unpin" : "Pin"}
+                      style={{ padding: "10px 12px", fontWeight: 900 }}
+                      onClick={() => togglePin("Forms:Forecast")}
+                    >
+                      {pins.has("Forms:Forecast") ? "★" : "☆"}
+                    </button>
+                  </div>
+                </div>
+
+                {pins.size > 0 && (
+                  <>
+                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900, marginTop: 16, marginBottom: 6 }}>
+                      Pinned
+                    </div>
+                    <div style={{ display: "grid", gap: 8 }}>
+                      {pins.has("Forms:Estimates") && (
+                        <button style={{ width: "100%", padding: "10px 12px", fontWeight: 900 }} onClick={goFormsEstimates}>
+                          Estimates (Pinned)
+                        </button>
+                      )}
+                      {pins.has("Forms:Forecast") && (
+                        <button style={{ width: "100%", padding: "10px 12px", fontWeight: 900 }} onClick={goFormsForecast}>
+                          Forecast (Pinned)
+                        </button>
+                      )}
+                    </div>
+                  </>
+                )}
+
+                <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800, marginTop: 16 }}>
+                  Data files: <code>/public/sample-data</code>
+                </div>
+              </>
+            )}
+
+            {topTab === "Reports" && (
+              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>
+                Reports placeholder (next).
+              </div>
+            )}
+
+            {topTab === "Dashboards" && (
+              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>
+                Dashboards placeholder (next).
+              </div>
+            )}
           </div>
         ) : null}
 
+        {/* Main */}
         <div style={{ minHeight: 0, padding: 10, display: "flex", flexDirection: "column", gap: 10 }}>
           {isDrawer && !sidebarOpen && (
             <button style={{ width: 120, padding: "8px 10px", fontWeight: 900 }} onClick={() => setSidebarOpen(true)}>
@@ -511,10 +772,44 @@ export default function App() {
             </button>
           )}
 
-          {(loadingHeaders || loadingItems) && <div style={{ padding: 10, fontWeight: 900 }}>Loading runtime JSON…</div>}
+          {(loadingHeaders || loadingItems) && topTab === "Forms" && (
+            <div style={{ padding: 10, fontWeight: 900 }}>Loading runtime JSON…</div>
+          )}
 
-          {view === "EstimatesList" && !loadingHeaders && (
+          {topTab === "Reports" && (
+            <div style={{ padding: 12, fontWeight: 900 }}>
+              Reports (PoC placeholder). Next: wire reports to data service and saved views.
+            </div>
+          )}
+
+          {topTab === "Dashboards" && (
+            <div style={{ padding: 12, fontWeight: 900 }}>
+              Dashboards (PoC placeholder). Next: add summary cards + charts.
+            </div>
+          )}
+
+          {/* Forms: Forecast */}
+          {topTab === "Forms" && view === "Forecast" && (
+            <div style={{ padding: 12, fontWeight: 900 }}>
+              Forecast (PoC placeholder). Next: similar grid UX to estimates but by period/cost code.
+            </div>
+          )}
+
+          {/* Forms: Estimates list */}
+          {topTab === "Forms" && view === "EstimatesList" && !loadingHeaders && (
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+              {/* quick pinned shortcuts on main screen */}
+              {pinnedForms.length > 0 && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={{ fontSize: 12, color: "#64748b", fontWeight: 900 }}>Quick:</div>
+                  {pinnedForms.map((p) => (
+                    <button key={p.key} style={{ fontWeight: 900, padding: "8px 10px" }} onClick={p.action}>
+                      {p.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div style={{ display: "grid", gap: 8, gridTemplateColumns: isNarrow ? "1fr" : "1fr 180px 160px 160px" }}>
                 <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" style={{ padding: 10, fontWeight: 800 }} />
 
@@ -552,21 +847,39 @@ export default function App() {
             </div>
           )}
 
-          {view === "EstimateDetail" && selectedHeader && (
+          {/* Forms: Estimate detail */}
+          {topTab === "Forms" && view === "EstimateDetail" && selectedHeader && (
             <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ fontWeight: 900 }}>
-                  {selectedHeader.estimateId} — {selectedHeader.client} ({selectedHeader.status})
+                  {selectedHeader.estimateId} — {selectedHeader.client}{" "}
+                  <span style={{ marginLeft: 6 }}>
+                    <StatusPill value={selectedHeader.status} />
+                  </span>
                   <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
-                    Created {formatDate(selectedHeader.dateCreated)} • Due {formatDate(selectedHeader.dueDate)}
+                    Created {formatDate(selectedHeader.dateCreated)} • Due {formatDate(selectedHeader.dueDate)} • Updated{" "}
+                    {formatDate(selectedHeader.lastUpdated)}
                   </div>
                 </div>
 
                 <div style={{ fontWeight: 900 }}>Total: {formatCurrencyCAD(estimateTotal)}</div>
 
-                <button style={{ padding: "8px 10px", fontWeight: 900 }} onClick={() => setView("EstimatesList")}>
-                  Back
-                </button>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  {/* Submit / Approve-Return logic */}
+                  {selectedHeader.status === "Draft" ? (
+                    <button style={{ padding: "8px 10px", fontWeight: 900 }} onClick={submitEstimate}>
+                      Submit
+                    </button>
+                  ) : selectedHeader.status === "Submitted" ? (
+                    <button style={{ padding: "8px 10px", fontWeight: 900 }} onClick={returnToDraft}>
+                      Approve / Return
+                    </button>
+                  ) : null}
+
+                  <button style={{ padding: "8px 10px", fontWeight: 900 }} onClick={() => setView("EstimatesList")}>
+                    Back
+                  </button>
+                </div>
               </div>
 
               {loadingLines && <div style={{ padding: 10, fontWeight: 900 }}>Loading estimate lines…</div>}
