@@ -11,8 +11,11 @@ type TopNav = "Dashboard" | "Estimates" | "Reports" | "Settings";
 type View = "EstimatesList" | "EstimateDetail" | "CreateEstimate";
 type Status = "Draft" | "Submitted" | "Approved" | "Completed";
 
-
-
+/**
+ * Structured Cost Code format (PoC):
+ *  NN-AAAAA-NNN-NNN  (example: 60-CONS-020-001)
+ */
+const COST_CODE_REGEX = /^\d{2}-[A-Z]{3,10}-\d{3}-\d{3}$/;
 
 type EstimateHeader = {
   estimateId: string;
@@ -25,16 +28,18 @@ type EstimateHeader = {
 };
 
 type ItemCatalog = {
-  itemCode: string;
+  costCode: string;
   description: string;
   uom: string;
   defaultUnitRate: number;
+  section: string;
 };
 
 type EstimateLine = {
   lineId: string;
-  lineNo: number; // for ordering/display
-  item: string;
+  lineNo: number;
+  section: string; // grouping
+  costCode: string;
   description: string;
   uom: string;
   qty: number;
@@ -42,24 +47,11 @@ type EstimateLine = {
   notes: string;
 };
 
-const LS_HEADERS = "poc_estimate_headers_v6";
-const LS_LINES_PREFIX = "poc_estimate_lines_v6__";
-const LS_SEEDED = "poc_seeded_v6";
+const LS_HEADERS = "poc_estimate_headers_v7";
+const LS_LINES_PREFIX = "poc_estimate_lines_v7__";
+const LS_SEEDED = "poc_seeded_v7";
 
 const PAGE_SIZE = 20;
-
-const testRows = [
-  { a: "Row 1", b: 10, c: "Open" },
-  { a: "Row 2", b: 20, c: "Draft" },
-];
-
-const testCols = [
-  { field: "a", headerName: "Col A" },
-  { field: "b", headerName: "Col B" },
-  { field: "c", headerName: "Status" },
-];
-
-
 
 function uuid(): string {
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
@@ -130,23 +122,6 @@ function saveLines(estimateId: string, lines: EstimateLine[]) {
   localStorage.setItem(LS_LINES_PREFIX + estimateId, JSON.stringify(lines));
 }
 
-/** Simple item catalog (can be expanded later) */
-const SAMPLE_ITEMS: ItemCatalog[] = [
-  { itemCode: "1010", description: "Mobilization", uom: "LS", defaultUnitRate: 12500 },
-  { itemCode: "1020", description: "Traffic control", uom: "day", defaultUnitRate: 850 },
-  { itemCode: "1030", description: "Survey & layout", uom: "LS", defaultUnitRate: 3800 },
-  { itemCode: "2010", description: "Excavation (common)", uom: "m3", defaultUnitRate: 22 },
-  { itemCode: "2020", description: "Granular base supply", uom: "t", defaultUnitRate: 42 },
-  { itemCode: "2030", description: "Asphalt paving", uom: "t", defaultUnitRate: 155 },
-  { itemCode: "2040", description: "Concrete repair", uom: "m2", defaultUnitRate: 310 },
-  { itemCode: "2050", description: "Rebar replacement", uom: "kg", defaultUnitRate: 6.5 },
-  { itemCode: "2060", description: "Line painting", uom: "km", defaultUnitRate: 1800 },
-  { itemCode: "2070", description: "Shoulder grading", uom: "km", defaultUnitRate: 9500 },
-  { itemCode: "3010", description: "Culvert supply (typ.)", uom: "ea", defaultUnitRate: 42000 },
-  { itemCode: "3020", description: "Culvert install (typ.)", uom: "LS", defaultUnitRate: 28500 },
-  { itemCode: "3030", description: "Backfill & compaction", uom: "LS", defaultUnitRate: 9800 }
-];
-
 function statusColors(s: Status): { bg: string; fg: string } {
   if (s === "Draft") return { bg: "#e0f2fe", fg: "#075985" };
   if (s === "Submitted") return { bg: "#fef3c7", fg: "#92400e" };
@@ -154,12 +129,48 @@ function statusColors(s: Status): { bg: string; fg: string } {
   return { bg: "#e5e7eb", fg: "#111827" }; // Completed
 }
 
-/**
- * Seed:
- * - creates sample estimate headers
- * - creates lines for each estimate (>= 20 rows each)
- * - ensures user sees sample data immediately
- */
+/** UOM list for dropdown editor */
+const UOM_OPTIONS = [
+  "LS",
+  "ea",
+  "day",
+  "km",
+  "m",
+  "m2",
+  "m3",
+  "t",
+  "kg"
+] as const;
+
+/** Sample item catalog using structured cost codes */
+const SAMPLE_ITEMS: ItemCatalog[] = [
+  // Preliminaries
+  { costCode: "60-CONS-010-001", description: "Mobilization", uom: "LS", defaultUnitRate: 12500, section: "Preliminaries" },
+  { costCode: "60-CONS-010-002", description: "Traffic Control (daily)", uom: "day", defaultUnitRate: 850, section: "Preliminaries" },
+  { costCode: "60-CONS-010-003", description: "Survey & Layout", uom: "LS", defaultUnitRate: 3800, section: "Preliminaries" },
+
+  // Earthworks
+  { costCode: "60-CONS-020-001", description: "Excavation (common)", uom: "m3", defaultUnitRate: 22, section: "Earthworks" },
+  { costCode: "60-CONS-020-002", description: "Backfill & Compaction", uom: "m3", defaultUnitRate: 18, section: "Earthworks" },
+  { costCode: "60-CONS-020-003", description: "Shoulder Grading", uom: "km", defaultUnitRate: 9500, section: "Earthworks" },
+
+  // Roadworks
+  { costCode: "60-CONS-030-001", description: "Granular Base Supply", uom: "t", defaultUnitRate: 42, section: "Roadworks" },
+  { costCode: "60-CONS-030-002", description: "Asphalt Paving", uom: "t", defaultUnitRate: 155, section: "Roadworks" },
+  { costCode: "60-CONS-030-003", description: "Line Painting", uom: "km", defaultUnitRate: 1800, section: "Roadworks" },
+
+  // Structures
+  { costCode: "60-CONS-040-001", description: "Concrete Repair", uom: "m2", defaultUnitRate: 310, section: "Structures" },
+  { costCode: "60-CONS-040-002", description: "Rebar Replacement", uom: "kg", defaultUnitRate: 6.5, section: "Structures" },
+
+  // Drainage
+  { costCode: "60-CONS-050-001", description: "Culvert Supply (typ.)", uom: "ea", defaultUnitRate: 42000, section: "Drainage" },
+  { costCode: "60-CONS-050-002", description: "Culvert Install (typ.)", uom: "LS", defaultUnitRate: 28500, section: "Drainage" }
+];
+
+const ITEM_BY_CODE = new Map(SAMPLE_ITEMS.map((i) => [i.costCode, i]));
+const ITEM_CODES = SAMPLE_ITEMS.map((i) => i.costCode);
+
 function seedIfNeeded() {
   const already = localStorage.getItem(LS_SEEDED);
   if (already === "1") return;
@@ -204,31 +215,38 @@ function seedIfNeeded() {
 
   saveHeaders(headers);
 
-  const pick = (code: string) => SAMPLE_ITEMS.find((i) => i.itemCode === code)!;
+  const patterns: Record<string, string[]> = {
+    "2001": ["60-CONS-010-001", "60-CONS-010-002", "60-CONS-030-001", "60-CONS-030-002", "60-CONS-030-003"],
+    "2002": ["60-CONS-010-001", "60-CONS-010-003", "60-CONS-040-001", "60-CONS-040-002"],
+    "1801": ["60-CONS-050-001", "60-CONS-050-002", "60-CONS-020-001", "60-CONS-020-002"]
+  };
 
   const makeLines = (estimateId: string, pattern: string[]): EstimateLine[] => {
     const lines: EstimateLine[] = [];
     for (let i = 1; i <= 25; i++) {
-      const item = pick(pattern[(i - 1) % pattern.length]);
-      const qty = i % 5 === 0 ? 1 : (i % 3 === 0 ? 10 : (i % 2 === 0 ? 25 : 5));
-      const unitRate = item.defaultUnitRate;
+      const code = pattern[(i - 1) % pattern.length];
+      const item = ITEM_BY_CODE.get(code)!;
+
+      const qty = i % 5 === 0 ? 1 : i % 3 === 0 ? 10 : i % 2 === 0 ? 25 : 5;
+
       lines.push({
         lineId: uuid(),
         lineNo: i,
-        item: item.itemCode,
+        section: item.section,
+        costCode: item.costCode,
         description: item.description,
         uom: item.uom,
         qty,
-        unitRate,
+        unitRate: item.defaultUnitRate,
         notes: i % 7 === 0 ? "Review quantity" : ""
       });
     }
     return lines;
   };
 
-  saveLines("2001", makeLines("2001", ["1010", "1020", "2020", "2030", "2060", "2070"]));
-  saveLines("2002", makeLines("2002", ["1010", "1030", "2040", "2050", "2060"]));
-  saveLines("1801", makeLines("1801", ["3010", "3020", "3030", "1020", "2010"]));
+  saveLines("2001", makeLines("2001", patterns["2001"]));
+  saveLines("2002", makeLines("2002", patterns["2002"]));
+  saveLines("1801", makeLines("1801", patterns["1801"]));
 
   localStorage.setItem(LS_SEEDED, "1");
 }
@@ -239,7 +257,6 @@ export default function App() {
     return null;
   }, []);
 
-  // Responsive
   const [vp, setVp] = useState(() => ({
     w: window.innerWidth,
     h: window.innerHeight
@@ -275,6 +292,16 @@ export default function App() {
     selectedEstimateId ? loadLines(selectedEstimateId) : []
   );
 
+  const [items] = useState<ItemCatalog[]>(() => SAMPLE_ITEMS);
+  const [selectedItemCode, setSelectedItemCode] = useState<string>(() => ITEM_CODES[0] ?? "");
+  const selectedItem = useMemo(
+    () => items.find((i) => i.costCode === selectedItemCode) ?? null,
+    [items, selectedItemCode]
+  );
+
+  const listApiRef = useRef<GridApi | null>(null);
+  const detailApiRef = useRef<GridApi | null>(null);
+
   // Estimate list filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | Status>("All");
@@ -284,14 +311,6 @@ export default function App() {
     return toIsoDateOnly(d);
   });
   const [toDate, setToDate] = useState<string>(() => toIsoDateOnly(new Date()));
-
-  // Catalog selector for adding lines
-  const [items] = useState<ItemCatalog[]>(() => SAMPLE_ITEMS);
-  const [selectedItemCode, setSelectedItemCode] = useState<string>(() => SAMPLE_ITEMS[0]?.itemCode ?? "");
-  const selectedItem = useMemo(() => items.find((i) => i.itemCode === selectedItemCode) ?? null, [items, selectedItemCode]);
-
-  const listApiRef = useRef<GridApi | null>(null);
-  const detailApiRef = useRef<GridApi | null>(null);
 
   const filteredHeaders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -332,8 +351,26 @@ export default function App() {
   }
 
   const estimateTotal = useMemo(() => {
-    return lines.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0), 0);
+    return lines.reduce(
+      (sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0),
+      0
+    );
   }, [lines]);
+
+  const pinnedBottomRow = useMemo(() => {
+    const pinned: EstimateLine = {
+      lineId: "PINNED_TOTAL",
+      lineNo: 0,
+      section: "",
+      costCode: "",
+      description: "TOTAL",
+      uom: "",
+      qty: 0,
+      unitRate: 0,
+      notes: ""
+    };
+    return [pinned];
+  }, []);
 
   function saveCurrentEstimate(silent?: boolean) {
     if (!selectedEstimateId) return;
@@ -347,7 +384,6 @@ export default function App() {
     return max + 1;
   }
 
-  /** This is the button you care about: it always inserts a real row */
   function addItemLine() {
     if (!selectedEstimateId) {
       alert("Open an estimate first.");
@@ -361,7 +397,8 @@ export default function App() {
     const newRow: EstimateLine = {
       lineId: uuid(),
       lineNo: nextLineNo(),
-      item: selectedItem.itemCode,
+      section: selectedItem.section,
+      costCode: selectedItem.costCode,
       description: selectedItem.description,
       uom: selectedItem.uom,
       qty: 1,
@@ -371,16 +408,14 @@ export default function App() {
 
     setLines((prev) => {
       const updated = [...prev, newRow];
+      saveLines(selectedEstimateId, updated);
       return updated;
     });
 
-    // Ensure the grid shows it immediately and persists
     setTimeout(() => {
       detailApiRef.current?.applyTransaction({ add: [newRow] });
       detailApiRef.current?.paginationGoToLastPage();
     }, 0);
-
-    setTimeout(() => saveCurrentEstimate(true), 0);
   }
 
   function addBlankLine() {
@@ -388,10 +423,12 @@ export default function App() {
       alert("Open an estimate first.");
       return;
     }
+
     const newRow: EstimateLine = {
       lineId: uuid(),
       lineNo: nextLineNo(),
-      item: "",
+      section: "General",
+      costCode: "",
       description: "",
       uom: "",
       qty: 0,
@@ -399,18 +436,21 @@ export default function App() {
       notes: ""
     };
 
-    setLines((prev) => [...prev, newRow]);
+    setLines((prev) => {
+      const updated = [...prev, newRow];
+      saveLines(selectedEstimateId, updated);
+      return updated;
+    });
+
     setTimeout(() => {
       detailApiRef.current?.applyTransaction({ add: [newRow] });
       detailApiRef.current?.paginationGoToLastPage();
     }, 0);
-
-    setTimeout(() => saveCurrentEstimate(true), 0);
   }
 
   function deleteSelectedLines() {
     const api = detailApiRef.current;
-    if (!api) return;
+    if (!api || !selectedEstimateId) return;
     const selected = api.getSelectedRows() as EstimateLine[];
     if (!selected.length) {
       alert("Select one or more rows first.");
@@ -419,7 +459,7 @@ export default function App() {
     const ids = new Set(selected.map((r) => r.lineId));
     const updated = lines.filter((r) => !ids.has(r.lineId));
     setLines(updated);
-    if (selectedEstimateId) saveLines(selectedEstimateId, updated);
+    saveLines(selectedEstimateId, updated);
   }
 
   function exportDetailCsv() {
@@ -448,14 +488,15 @@ export default function App() {
     const updatedHeaders = [header, ...headers];
     persistHeaders(updatedHeaders);
 
-    // Pre-fill 25 lines (Excel-like grid)
+    // Pre-fill 25 lines
     const seedLines: EstimateLine[] = [];
     for (let i = 1; i <= 25; i++) {
       const item = SAMPLE_ITEMS[(i - 1) % SAMPLE_ITEMS.length];
       seedLines.push({
         lineId: uuid(),
         lineNo: i,
-        item: item.itemCode,
+        section: item.section,
+        costCode: item.costCode,
         description: item.description,
         uom: item.uom,
         qty: i % 4 === 0 ? 1 : 5,
@@ -473,7 +514,6 @@ export default function App() {
     if (isDrawer) setSidebarOpen(false);
   }
 
-  // Grids
   const estimatesListCols = useMemo<ColDef<EstimateHeader>[]>(() => {
     return [
       { field: "estimateId", headerName: "ID", width: 90 },
@@ -507,7 +547,10 @@ export default function App() {
           const id = p.data?.estimateId;
           if (!id) return 0;
           const rows = loadLines(id);
-          return rows.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0), 0);
+          return rows.reduce(
+            (sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0),
+            0
+          );
         },
         valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0)
       },
@@ -522,18 +565,113 @@ export default function App() {
 
   const estimateDetailCols = useMemo<ColDef<EstimateLine>[]>(() => {
     return [
-      { field: "lineNo", headerName: "#", width: 70, editable: false },
-      { field: "item", headerName: "Item", editable: true, width: 100 },
-      { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 340 },
-      { field: "uom", headerName: "UOM", editable: true, width: 90 },
-      { field: "qty", headerName: "Qty", editable: true, width: 110, valueParser: parseNumber },
-      { field: "unitRate", headerName: "Price", editable: true, width: 150, valueParser: parseNumber, valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0) },
-      { headerName: "Total", width: 160, valueGetter: (p) => (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0), valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0) },
-      { field: "notes", headerName: "Notes", editable: true, width: 220 }
-    ];
-  }, []);
+      // grouping key (hidden)
+      { field: "section", headerName: "Section", rowGroup: true, hide: true },
 
-  // Styles: key change = content uses full width, grid fills remaining height, no fixed calc() heights.
+      { field: "lineNo", headerName: "#", width: 70, editable: false },
+
+      {
+        field: "costCode",
+        headerName: "Cost Code",
+        width: 170,
+        editable: true,
+
+        cellEditor: "agRichSelectCellEditor",
+        cellEditorParams: {
+          values: ITEM_CODES,
+          searchType: "matchAny",
+          allowTyping: true,
+          filterList: true,
+          highlightMatch: true
+        },
+
+        valueSetter: (p) => {
+          const newCode = String(p.newValue ?? "").trim().toUpperCase();
+          p.data.costCode = newCode;
+
+          const found = ITEM_BY_CODE.get(newCode);
+          if (found) {
+            p.data.description = found.description;
+            p.data.uom = found.uom;
+            p.data.unitRate = found.defaultUnitRate;
+            p.data.section = found.section;
+          } else {
+            // if unknown code, keep user-entered
+            p.data.section = "General";
+          }
+          return true;
+        },
+
+        cellClassRules: {
+          "cell-invalid": (p) => {
+            if (p.node.rowPinned) return false;
+            const v = String(p.value ?? "").trim().toUpperCase();
+            if (!v) return false;
+            return !COST_CODE_REGEX.test(v);
+          }
+        }
+      },
+
+      {
+        field: "description",
+        headerName: "Description",
+        editable: true,
+        flex: 1,
+        minWidth: 340,
+        cellStyle: (p) => (p.node.rowPinned ? { fontWeight: "900" } : undefined)
+      },
+
+      {
+        field: "uom",
+        headerName: "UOM",
+        width: 100,
+        editable: true,
+        cellEditor: "agSelectCellEditor",
+        cellEditorParams: { values: Array.from(UOM_OPTIONS) }
+      },
+
+      {
+        field: "qty",
+        headerName: "Qty",
+        width: 110,
+        editable: true,
+        valueParser: parseNumber,
+        valueSetter: (p) => {
+          const n = Number(p.newValue);
+          p.data.qty = isFinite(n) ? Math.max(0, n) : 0;
+          return true;
+        }
+      },
+
+      {
+        field: "unitRate",
+        headerName: "Unit Rate",
+        width: 150,
+        editable: true,
+        valueParser: parseNumber,
+        valueSetter: (p) => {
+          const n = Number(p.newValue);
+          p.data.unitRate = isFinite(n) ? Math.max(0, n) : 0;
+          return true;
+        },
+        valueFormatter: (p) => (p.node.rowPinned ? "" : formatCurrencyCAD(Number(p.value) || 0))
+      },
+
+      {
+        headerName: "Line Total",
+        width: 170,
+        valueGetter: (p) => {
+          if (p.node.rowPinned) return estimateTotal;
+          return (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0);
+        },
+        valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0),
+        cellStyle: (p) => (p.node.rowPinned ? { fontWeight: "900" } : undefined)
+      },
+
+      { field: "notes", headerName: "Notes", editable: true, width: 240 }
+    ];
+  }, [estimateTotal]);
+
   const styles = `
     :root {
       --bg: #f3f6fb;
@@ -549,6 +687,11 @@ export default function App() {
     html, body, #root { height: 100%; }
     body { margin: 0; background: var(--bg); color: var(--text); }
     * { box-sizing: border-box; }
+
+    .cell-invalid {
+      background: #fee2e2 !important;
+      border: 1px solid #ef4444 !important;
+    }
 
     .app {
       height: 100vh;
@@ -645,8 +788,6 @@ export default function App() {
       display: flex;
       flex-direction: column;
       gap: 12px;
-
-      /* this is what makes it expand to full browser width */
       width: 100%;
     }
 
@@ -756,7 +897,7 @@ export default function App() {
 
     .detailToolbar {
       display: grid;
-      grid-template-columns: 1fr 340px;
+      grid-template-columns: 1fr 360px;
       gap: 10px;
       align-items: end;
     }
@@ -872,9 +1013,7 @@ export default function App() {
 
         {/* Main */}
         <div className="main">
-          {isDrawer && sidebarOpen && (
-            <div className="overlay" onClick={() => setSidebarOpen(false)} />
-          )}
+          {isDrawer && sidebarOpen && <div className="overlay" onClick={() => setSidebarOpen(false)} />}
 
           {/* Sidebar */}
           <div className={`sidebar ${sidebarOpen ? "open" : ""}`}>
@@ -910,18 +1049,20 @@ export default function App() {
               style={{ marginTop: 10, width: "100%" }}
               onClick={() => {
                 localStorage.removeItem(LS_HEADERS);
-                // wipe all known estimates lines by wiping prefix keys (simple approach: full clear PoC)
-                // safer for PoC: clear everything we wrote
                 Object.keys(localStorage)
                   .filter((k) => k.startsWith(LS_LINES_PREFIX) || k === LS_SEEDED)
                   .forEach((k) => localStorage.removeItem(k));
                 localStorage.removeItem(LS_SEEDED);
+
                 seedIfNeeded();
-                setHeaders(loadHeaders());
-                const first = loadHeaders()[0]?.estimateId ?? null;
+
+                const reloaded = loadHeaders();
+                setHeaders(reloaded);
+                const first = reloaded[0]?.estimateId ?? null;
                 setSelectedEstimateId(first);
                 setLines(first ? loadLines(first) : []);
                 setView("EstimatesList");
+
                 alert("Reset sample data.");
               }}
             >
@@ -1138,29 +1279,28 @@ export default function App() {
                   <div className="detailToolbar">
                     <div style={{ fontWeight: 900 }}>
                       Estimate Line Items (Excel-style) — page size {PAGE_SIZE}
-                      <div className="subtle">Double-click to edit. Changes auto-save.</div>
+                      <div className="subtle">Double-click to edit. Copy/paste supported. Grouped by Section.</div>
                     </div>
 
-                    {/* Right: Add item + action buttons */}
                     <div className="toolbarRight">
                       <select
                         className="select"
                         value={selectedItemCode}
                         onChange={(e) => setSelectedItemCode(e.target.value)}
-                        title="Select an item to add"
+                        title="Select a cost code to add"
                       >
                         {items.map((it) => (
-                          <option key={it.itemCode} value={it.itemCode}>
-                            {it.itemCode} — {it.description} ({it.uom})
+                          <option key={it.costCode} value={it.costCode}>
+                            {it.costCode} — {it.description} ({it.uom})
                           </option>
                         ))}
                       </select>
 
-                      <button className="btn-primary" onClick={addItemLine} title="Adds selected item as a new line">
+                      <button className="btn-primary" onClick={addItemLine}>
                         Add Item
                       </button>
 
-                      <button className="btn-ghost" onClick={addBlankLine} title="Adds an empty editable row">
+                      <button className="btn-ghost" onClick={addBlankLine}>
                         Add Blank
                       </button>
 
@@ -1175,36 +1315,60 @@ export default function App() {
                       <AgGridReact<EstimateLine>
                         rowData={lines}
                         columnDefs={estimateDetailCols}
-                        defaultColDef={{ resizable: true, sortable: true, filter: true }}
-                        rowSelection="multiple"
+                        defaultColDef={{ resizable: true, sortable: true, filter: true, editable: true }}
                         getRowId={(p) => p.data.lineId}
-                        singleClickEdit={false}
+                        rowSelection="multiple"
+                        suppressRowClickSelection={true}
+
+                        /* grouping */
+                        groupDisplayType={"groupRows"}
+                        autoGroupColumnDef={{
+                          headerName: "Section",
+                          minWidth: 260,
+                          cellRendererParams: { suppressCount: false }
+                        }}
+                        groupDefaultExpanded={1}
+
+                        /* pinned total row */
+                        pinnedBottomRowData={pinnedBottomRow}
+
+                        /* Excel-ish editing/navigation */
+                        enterNavigatesVertically={true}
+                        enterNavigatesVerticallyAfterEdit={true}
                         stopEditingWhenCellsLoseFocus={true}
+                        undoRedoCellEditing={true}
+                        undoRedoCellEditingLimit={50}
+
+                        /* Excel-ish copy/paste */
+                        enableRangeSelection={true}
+                        suppressClipboardPaste={false}
+                        copyHeadersToClipboard={false}
+                        processDataFromClipboard={(params) => params.data}
+
                         pagination={true}
                         paginationPageSize={PAGE_SIZE}
+
                         onGridReady={(e) => {
                           detailApiRef.current = e.api;
-                          // Ensure it sizes to full width on load
                           setTimeout(() => e.api.sizeColumnsToFit(), 50);
                         }}
                         onFirstDataRendered={(e) => {
-                          // Fit columns to available width (desktop + resize-friendly)
                           e.api.sizeColumnsToFit();
                         }}
                         onGridSizeChanged={(e) => {
-                          // Make it expand when browser resizes
                           e.api.sizeColumnsToFit();
                         }}
+
                         onCellValueChanged={() => {
-                          // Auto-save on any edit
                           if (!selectedEstimateId) return;
-                          saveLines(selectedEstimateId, lines);
-                          updateHeader(selectedHeader.estimateId, {});
-                        }}
-                        onRowValueChanged={() => {
-                          if (!selectedEstimateId) return;
-                          saveLines(selectedEstimateId, lines);
-                          updateHeader(selectedHeader.estimateId, {});
+
+                          // AG Grid mutates row objects; force React re-render so totals update
+                          setLines((prev) => {
+                            const updated = [...prev];
+                            saveLines(selectedEstimateId, updated);
+                            updateHeader(selectedEstimateId, {});
+                            return updated;
+                          });
                         }}
                       />
                     </div>
@@ -1212,7 +1376,8 @@ export default function App() {
 
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                     <div className="subtle">
-                      Select rows and use the grid’s built-in filter/sort. Multi-select rows to delete.
+                      Paste from Excel: copy a rectangular block and paste into the focused cell.
+                      Invalid cost codes highlight in red.
                     </div>
                     <button className="btn-ghost" onClick={deleteSelectedLines}>
                       Delete Selected
