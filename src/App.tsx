@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, GridApi, RowClickedEvent } from "ag-grid-community";
+import type {
+  ColDef,
+  GridApi,
+  RowClickedEvent,
+  ValueParserParams
+} from "ag-grid-community";
 
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -19,8 +24,16 @@ type EstimateHeader = {
   lastUpdated: string; // ISO
 };
 
+type ItemCatalog = {
+  itemCode: string;
+  description: string;
+  uom: string;
+  defaultUnitRate: number;
+};
+
 type EstimateLine = {
   lineId: string;
+  lineNo: number; // for ordering/display
   item: string;
   description: string;
   uom: string;
@@ -29,8 +42,11 @@ type EstimateLine = {
   notes: string;
 };
 
-const LS_HEADERS = "poc_estimate_headers_v4";
-const LS_LINES_PREFIX = "poc_estimate_lines_v4__";
+const LS_HEADERS = "poc_estimate_headers_v6";
+const LS_LINES_PREFIX = "poc_estimate_lines_v6__";
+const LS_SEEDED = "poc_seeded_v6";
+
+const PAGE_SIZE = 20;
 
 function uuid(): string {
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
@@ -66,6 +82,14 @@ function formatCurrencyCAD(n: number): string {
   if (!isFinite(n)) return "";
   return n.toLocaleString(undefined, { style: "currency", currency: "CAD" });
 }
+function parseNumber(p: ValueParserParams): number {
+  const raw = String(p.newValue ?? "").trim();
+  if (!raw) return 0;
+  const cleaned = raw.replace(/[^0-9.\-]/g, "");
+  const n = Number(cleaned);
+  return isFinite(n) ? n : 0;
+}
+
 function loadHeaders(): EstimateHeader[] {
   const raw = localStorage.getItem(LS_HEADERS);
   if (!raw) return [];
@@ -93,93 +117,116 @@ function saveLines(estimateId: string, lines: EstimateLine[]) {
   localStorage.setItem(LS_LINES_PREFIX + estimateId, JSON.stringify(lines));
 }
 
-function seedIfEmpty() {
-  const existing = loadHeaders();
-  if (existing.length > 0) return;
+/** Simple item catalog (can be expanded later) */
+const SAMPLE_ITEMS: ItemCatalog[] = [
+  { itemCode: "1010", description: "Mobilization", uom: "LS", defaultUnitRate: 12500 },
+  { itemCode: "1020", description: "Traffic control", uom: "day", defaultUnitRate: 850 },
+  { itemCode: "1030", description: "Survey & layout", uom: "LS", defaultUnitRate: 3800 },
+  { itemCode: "2010", description: "Excavation (common)", uom: "m3", defaultUnitRate: 22 },
+  { itemCode: "2020", description: "Granular base supply", uom: "t", defaultUnitRate: 42 },
+  { itemCode: "2030", description: "Asphalt paving", uom: "t", defaultUnitRate: 155 },
+  { itemCode: "2040", description: "Concrete repair", uom: "m2", defaultUnitRate: 310 },
+  { itemCode: "2050", description: "Rebar replacement", uom: "kg", defaultUnitRate: 6.5 },
+  { itemCode: "2060", description: "Line painting", uom: "km", defaultUnitRate: 1800 },
+  { itemCode: "2070", description: "Shoulder grading", uom: "km", defaultUnitRate: 9500 },
+  { itemCode: "3010", description: "Culvert supply (typ.)", uom: "ea", defaultUnitRate: 42000 },
+  { itemCode: "3020", description: "Culvert install (typ.)", uom: "LS", defaultUnitRate: 28500 },
+  { itemCode: "3030", description: "Backfill & compaction", uom: "LS", defaultUnitRate: 9800 }
+];
+
+function statusColors(s: Status): { bg: string; fg: string } {
+  if (s === "Draft") return { bg: "#e0f2fe", fg: "#075985" };
+  if (s === "Submitted") return { bg: "#fef3c7", fg: "#92400e" };
+  if (s === "Approved") return { bg: "#dcfce7", fg: "#166534" };
+  return { bg: "#e5e7eb", fg: "#111827" }; // Completed
+}
+
+/**
+ * Seed:
+ * - creates sample estimate headers
+ * - creates lines for each estimate (>= 20 rows each)
+ * - ensures user sees sample data immediately
+ */
+function seedIfNeeded() {
+  const already = localStorage.getItem(LS_SEEDED);
+  if (already === "1") return;
+
+  const existingHeaders = loadHeaders();
+  if (existingHeaders.length > 0) {
+    localStorage.setItem(LS_SEEDED, "1");
+    return;
+  }
 
   const d = (y: number, m: number, day: number) => new Date(y, m - 1, day).toISOString();
 
   const headers: EstimateHeader[] = [
-    { estimateId: "1574", client: "Custom Solutions Inc.", title: "Estimate Custom Solutions", status: "Draft", dateCreated: d(2024, 9, 3), dueDate: d(2024, 12, 20), lastUpdated: nowIso() },
-    { estimateId: "1533", client: "Anting Detiming", title: "Estimated Drops", status: "Submitted", dateCreated: d(2024, 9, 1), dueDate: d(2024, 11, 15), lastUpdated: nowIso() },
-    { estimateId: "1535", client: "Supply A", title: "Office X", status: "Approved", dateCreated: d(2024, 9, 2), dueDate: d(2024, 10, 30), lastUpdated: nowIso() },
-
-    // “real-ish” projects
-    { estimateId: "2001", client: "Highway 1 Resurfacing", title: "Class D Estimate", status: "Draft", dateCreated: d(2025, 1, 5), dueDate: d(2025, 2, 10), lastUpdated: nowIso() },
-    { estimateId: "2002", client: "Bridge Rehab - Segment B", title: "Initial Estimate", status: "Submitted", dateCreated: d(2025, 1, 12), dueDate: d(2025, 2, 15), lastUpdated: nowIso() },
-    { estimateId: "2003", client: "Drainage Improvements", title: "Revised Estimate", status: "Approved", dateCreated: d(2024, 12, 18), dueDate: d(2025, 1, 20), lastUpdated: nowIso() },
-
-    // Completed estimates (view/search/edit same as others)
-    { estimateId: "1801", client: "Culvert Replacement - Site 12", title: "Final Estimate", status: "Completed", dateCreated: d(2024, 5, 14), dueDate: d(2024, 6, 30), lastUpdated: nowIso() },
-    { estimateId: "1802", client: "Road Shoulder Widening", title: "As-Built Estimate", status: "Completed", dateCreated: d(2023, 10, 2), dueDate: d(2023, 12, 15), lastUpdated: nowIso() },
-    { estimateId: "1803", client: "Bridge Paint & Rehab", title: "Closeout Estimate", status: "Completed", dateCreated: d(2022, 8, 20), dueDate: d(2022, 10, 1), lastUpdated: nowIso() },
-    { estimateId: "1804", client: "Retaining Wall Repair", title: "Completed Scope", status: "Completed", dateCreated: d(2021, 4, 12), dueDate: d(2021, 6, 1), lastUpdated: nowIso() }
+    {
+      estimateId: "2001",
+      client: "Highway 1 Resurfacing",
+      title: "Class D Estimate",
+      status: "Draft",
+      dateCreated: d(2025, 1, 5),
+      dueDate: d(2025, 2, 10),
+      lastUpdated: nowIso()
+    },
+    {
+      estimateId: "2002",
+      client: "Bridge Rehab - Segment B",
+      title: "Initial Estimate",
+      status: "Submitted",
+      dateCreated: d(2025, 1, 12),
+      dueDate: d(2025, 2, 15),
+      lastUpdated: nowIso()
+    },
+    {
+      estimateId: "1801",
+      client: "Culvert Replacement - Site 12",
+      title: "Final Estimate",
+      status: "Completed",
+      dateCreated: d(2024, 5, 14),
+      dueDate: d(2024, 6, 30),
+      lastUpdated: nowIso()
+    }
   ];
 
   saveHeaders(headers);
 
-  const seedLines = (estimateId: string, rows: Array<Partial<EstimateLine>>) => {
-    saveLines(
-      estimateId,
-      rows.map((r, i) => ({
+  const pick = (code: string) => SAMPLE_ITEMS.find((i) => i.itemCode === code)!;
+
+  const makeLines = (estimateId: string, pattern: string[]): EstimateLine[] => {
+    const lines: EstimateLine[] = [];
+    for (let i = 1; i <= 25; i++) {
+      const item = pick(pattern[(i - 1) % pattern.length]);
+      const qty = i % 5 === 0 ? 1 : (i % 3 === 0 ? 10 : (i % 2 === 0 ? 25 : 5));
+      const unitRate = item.defaultUnitRate;
+      lines.push({
         lineId: uuid(),
-        item: r.item ?? String(1000 + i * 10),
-        description: r.description ?? "",
-        uom: r.uom ?? "LS",
-        qty: r.qty ?? 1,
-        unitRate: r.unitRate ?? 0,
-        notes: r.notes ?? ""
-      }))
-    );
+        lineNo: i,
+        item: item.itemCode,
+        description: item.description,
+        uom: item.uom,
+        qty,
+        unitRate,
+        notes: i % 7 === 0 ? "Review quantity" : ""
+      });
+    }
+    return lines;
   };
 
-  seedLines("1574", [
-    { item: "1010", description: "Mobilization", uom: "LS", qty: 1, unitRate: 12500 },
-    { item: "1020", description: "Traffic control", uom: "day", qty: 12, unitRate: 850 },
-    { item: "1030", description: "Survey & layout", uom: "LS", qty: 1, unitRate: 3800 }
-  ]);
+  saveLines("2001", makeLines("2001", ["1010", "1020", "2020", "2030", "2060", "2070"]));
+  saveLines("2002", makeLines("2002", ["1010", "1030", "2040", "2050", "2060"]));
+  saveLines("1801", makeLines("1801", ["3010", "3020", "3030", "1020", "2010"]));
 
-  seedLines("2001", [
-    { description: "Asphalt paving", uom: "t", qty: 450, unitRate: 145 },
-    { description: "Line painting", uom: "km", qty: 12, unitRate: 1800 },
-    { description: "Shoulder grading", uom: "km", qty: 8, unitRate: 9500 }
-  ]);
-
-  seedLines("2002", [
-    { description: "Concrete repair", uom: "m2", qty: 120, unitRate: 310 },
-    { description: "Rebar replacement", uom: "kg", qty: 900, unitRate: 6.5 }
-  ]);
-
-  seedLines("1801", [
-    { description: "Culvert supply", uom: "ea", qty: 1, unitRate: 42000, notes: "Delivered" },
-    { description: "Excavation & install", uom: "LS", qty: 1, unitRate: 28500, notes: "Completed" },
-    { description: "Backfill & compaction", uom: "LS", qty: 1, unitRate: 9800, notes: "Completed" }
-  ]);
-
-  seedLines("1802", [
-    { description: "Granular base", uom: "t", qty: 620, unitRate: 42 },
-    { description: "Paving (wear course)", uom: "t", qty: 300, unitRate: 155 }
-  ]);
-
-  seedLines("1803", [
-    { description: "Containment setup", uom: "LS", qty: 1, unitRate: 12000 },
-    { description: "Surface prep", uom: "m2", qty: 850, unitRate: 28 },
-    { description: "Coating system", uom: "m2", qty: 850, unitRate: 35 }
-  ]);
-
-  seedLines("1804", [
-    { description: "Concrete patch", uom: "m2", qty: 60, unitRate: 320 },
-    { description: "Drainage improvements", uom: "LS", qty: 1, unitRate: 7800 }
-  ]);
+  localStorage.setItem(LS_SEEDED, "1");
 }
 
 export default function App() {
   useMemo(() => {
-    seedIfEmpty();
+    seedIfNeeded();
     return null;
   }, []);
 
-  // breakpoints: iPhone-ish, tablet, small desktop, large desktop
+  // Responsive
   const [vp, setVp] = useState(() => ({
     w: window.innerWidth,
     h: window.innerHeight
@@ -193,23 +240,16 @@ export default function App() {
 
   const isPhone = vp.w <= 480;
   const isTablet = vp.w > 480 && vp.w <= 768;
-  const isSmallDesktop = vp.w > 768 && vp.w < 1400;
-  const isLargeDesktop = vp.w >= 1400;
-
-  // Sidebar behavior:
-  // - phone/tablet: drawer
-  // - desktop: always visible
   const isDrawer = isPhone || isTablet;
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
 
-  useEffect(() => {
-    setSidebarOpen(!isDrawer);
-  }, [isDrawer]);
+  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
+  useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
 
   const [topNav, setTopNav] = useState<TopNav>("Estimates");
   const [view, setView] = useState<View>("EstimatesList");
 
   const [headers, setHeaders] = useState<EstimateHeader[]>(() => loadHeaders());
+
   const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(
     headers[0]?.estimateId ?? null
   );
@@ -222,22 +262,23 @@ export default function App() {
     selectedEstimateId ? loadLines(selectedEstimateId) : []
   );
 
-  const listApiRef = useRef<GridApi | null>(null);
-  const detailApiRef = useRef<GridApi | null>(null);
-
-  // Filters
+  // Estimate list filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | Status>("All");
-
-  // Default date range:
-  // - desktop: 2 years
-  // - phone: 1 year (less scrolling)
   const [fromDate, setFromDate] = useState<string>(() => {
     const d = new Date();
     d.setDate(d.getDate() - (isPhone ? 365 : 730));
     return toIsoDateOnly(d);
   });
   const [toDate, setToDate] = useState<string>(() => toIsoDateOnly(new Date()));
+
+  // Catalog selector for adding lines
+  const [items] = useState<ItemCatalog[]>(() => SAMPLE_ITEMS);
+  const [selectedItemCode, setSelectedItemCode] = useState<string>(() => SAMPLE_ITEMS[0]?.itemCode ?? "");
+  const selectedItem = useMemo(() => items.find((i) => i.itemCode === selectedItemCode) ?? null, [items, selectedItemCode]);
+
+  const listApiRef = useRef<GridApi | null>(null);
+  const detailApiRef = useRef<GridApi | null>(null);
 
   const filteredHeaders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -257,16 +298,16 @@ export default function App() {
     });
   }, [headers, search, statusFilter, fromDate, toDate]);
 
-  const estimateTotal = useMemo(() => {
-    return lines.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0), 0);
-  }, [lines]);
+  function persistHeaders(updated: EstimateHeader[]) {
+    setHeaders(updated);
+    saveHeaders(updated);
+  }
 
   function updateHeader(estimateId: string, patch: Partial<EstimateHeader>) {
     const updated = headers.map((h) =>
       h.estimateId === estimateId ? { ...h, ...patch, lastUpdated: nowIso() } : h
     );
-    setHeaders(updated);
-    saveHeaders(updated);
+    persistHeaders(updated);
   }
 
   function openEstimate(id: string) {
@@ -277,11 +318,102 @@ export default function App() {
     if (isDrawer) setSidebarOpen(false);
   }
 
-  function saveCurrentEstimate() {
+  const estimateTotal = useMemo(() => {
+    return lines.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0), 0);
+  }, [lines]);
+
+  function saveCurrentEstimate(silent?: boolean) {
     if (!selectedEstimateId) return;
     saveLines(selectedEstimateId, lines);
     updateHeader(selectedEstimateId, {});
-    alert("Saved (localStorage).");
+    if (!silent) alert("Saved (localStorage).");
+  }
+
+  function nextLineNo(): number {
+    const max = lines.reduce((m, r) => Math.max(m, r.lineNo || 0), 0);
+    return max + 1;
+  }
+
+  /** This is the button you care about: it always inserts a real row */
+  function addItemLine() {
+    if (!selectedEstimateId) {
+      alert("Open an estimate first.");
+      return;
+    }
+    if (!selectedItem) {
+      alert("Select an item first.");
+      return;
+    }
+
+    const newRow: EstimateLine = {
+      lineId: uuid(),
+      lineNo: nextLineNo(),
+      item: selectedItem.itemCode,
+      description: selectedItem.description,
+      uom: selectedItem.uom,
+      qty: 1,
+      unitRate: selectedItem.defaultUnitRate,
+      notes: ""
+    };
+
+    setLines((prev) => {
+      const updated = [...prev, newRow];
+      return updated;
+    });
+
+    // Ensure the grid shows it immediately and persists
+    setTimeout(() => {
+      detailApiRef.current?.applyTransaction({ add: [newRow] });
+      detailApiRef.current?.paginationGoToLastPage();
+    }, 0);
+
+    setTimeout(() => saveCurrentEstimate(true), 0);
+  }
+
+  function addBlankLine() {
+    if (!selectedEstimateId) {
+      alert("Open an estimate first.");
+      return;
+    }
+    const newRow: EstimateLine = {
+      lineId: uuid(),
+      lineNo: nextLineNo(),
+      item: "",
+      description: "",
+      uom: "",
+      qty: 0,
+      unitRate: 0,
+      notes: ""
+    };
+
+    setLines((prev) => [...prev, newRow]);
+    setTimeout(() => {
+      detailApiRef.current?.applyTransaction({ add: [newRow] });
+      detailApiRef.current?.paginationGoToLastPage();
+    }, 0);
+
+    setTimeout(() => saveCurrentEstimate(true), 0);
+  }
+
+  function deleteSelectedLines() {
+    const api = detailApiRef.current;
+    if (!api) return;
+    const selected = api.getSelectedRows() as EstimateLine[];
+    if (!selected.length) {
+      alert("Select one or more rows first.");
+      return;
+    }
+    const ids = new Set(selected.map((r) => r.lineId));
+    const updated = lines.filter((r) => !ids.has(r.lineId));
+    setLines(updated);
+    if (selectedEstimateId) saveLines(selectedEstimateId, updated);
+  }
+
+  function exportDetailCsv() {
+    const api = detailApiRef.current;
+    if (!api) return;
+    const fileName = selectedEstimateId ? `estimate-${selectedEstimateId}.csv` : "estimate.csv";
+    api.exportDataAsCsv({ fileName });
   }
 
   // Create estimate
@@ -300,25 +432,40 @@ export default function App() {
       lastUpdated: nowIso()
     };
 
-    const updated = [header, ...headers];
-    setHeaders(updated);
-    saveHeaders(updated);
+    const updatedHeaders = [header, ...headers];
+    persistHeaders(updatedHeaders);
 
-    saveLines(id, []);
+    // Pre-fill 25 lines (Excel-like grid)
+    const seedLines: EstimateLine[] = [];
+    for (let i = 1; i <= 25; i++) {
+      const item = SAMPLE_ITEMS[(i - 1) % SAMPLE_ITEMS.length];
+      seedLines.push({
+        lineId: uuid(),
+        lineNo: i,
+        item: item.itemCode,
+        description: item.description,
+        uom: item.uom,
+        qty: i % 4 === 0 ? 1 : 5,
+        unitRate: item.defaultUnitRate,
+        notes: ""
+      });
+    }
+
+    saveLines(id, seedLines);
     setSelectedEstimateId(id);
-    setLines([]);
+    setLines(seedLines);
     setNewClient("");
     setNewTitle("");
     setView("EstimateDetail");
     if (isDrawer) setSidebarOpen(false);
   }
 
-  // Grid columns
+  // Grids
   const estimatesListCols = useMemo<ColDef<EstimateHeader>[]>(() => {
     return [
       { field: "estimateId", headerName: "ID", width: 90 },
-      { field: "client", headerName: "Client", flex: 1, minWidth: 200 },
-      { field: "title", headerName: "Title", flex: 1, minWidth: 220 },
+      { field: "client", headerName: "Client", flex: 1, minWidth: 220 },
+      { field: "title", headerName: "Title", flex: 1, minWidth: 240 },
       {
         field: "dateCreated",
         headerName: "Date Created",
@@ -342,7 +489,7 @@ export default function App() {
       },
       {
         headerName: "Amount",
-        width: 150,
+        width: 160,
         valueGetter: (p) => {
           const id = p.data?.estimateId;
           if (!id) return 0;
@@ -362,66 +509,18 @@ export default function App() {
 
   const estimateDetailCols = useMemo<ColDef<EstimateLine>[]>(() => {
     return [
-      { field: "item", headerName: "Item", editable: true, width: 90 },
-      { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 300 },
+      { field: "lineNo", headerName: "#", width: 70, editable: false },
+      { field: "item", headerName: "Item", editable: true, width: 100 },
+      { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 340 },
       { field: "uom", headerName: "UOM", editable: true, width: 90 },
-      {
-        field: "qty",
-        headerName: "Qty",
-        editable: true,
-        width: 110,
-        valueParser: (p) => Number(p.newValue)
-      },
-      {
-        field: "unitRate",
-        headerName: "Price",
-        editable: true,
-        width: 140,
-        valueParser: (p) => Number(p.newValue),
-        valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0)
-      },
-      {
-        headerName: "Total",
-        width: 150,
-        valueGetter: (p) => (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0),
-        valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0)
-      },
+      { field: "qty", headerName: "Qty", editable: true, width: 110, valueParser: parseNumber },
+      { field: "unitRate", headerName: "Price", editable: true, width: 150, valueParser: parseNumber, valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0) },
+      { headerName: "Total", width: 160, valueGetter: (p) => (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0), valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0) },
       { field: "notes", headerName: "Notes", editable: true, width: 220 }
     ];
   }, []);
 
-  function addLine() {
-    setLines((prev) => [
-      ...prev,
-      { lineId: uuid(), item: "", description: "", uom: "", qty: 0, unitRate: 0, notes: "" }
-    ]);
-  }
-  function deleteSelectedLines() {
-    const api = detailApiRef.current;
-    if (!api) return;
-    const selected = api.getSelectedRows() as EstimateLine[];
-    if (!selected.length) {
-      alert("Select one or more rows first.");
-      return;
-    }
-    const ids = new Set(selected.map((r) => r.lineId));
-    setLines((prev) => prev.filter((r) => !ids.has(r.lineId)));
-  }
-  function exportDetailCsv() {
-    const api = detailApiRef.current;
-    if (!api) return;
-    const fileName = selectedEstimateId ? `estimate-${selectedEstimateId}.csv` : "estimate.csv";
-    api.exportDataAsCsv({ fileName });
-  }
-
-  // Status colors (light theme)
-  function statusColors(s: Status): { bg: string; fg: string } {
-    if (s === "Draft") return { bg: "#e0f2fe", fg: "#075985" };
-    if (s === "Submitted") return { bg: "#fef3c7", fg: "#92400e" };
-    if (s === "Approved") return { bg: "#dcfce7", fg: "#166534" };
-    return { bg: "#e5e7eb", fg: "#111827" }; // Completed
-  }
-
+  // Styles: key change = content uses full width, grid fills remaining height, no fixed calc() heights.
   const styles = `
     :root {
       --bg: #f3f6fb;
@@ -442,9 +541,9 @@ export default function App() {
       height: 100vh;
       display: grid;
       grid-template-rows: 56px 1fr;
-      font-family: system-ui, Segoe UI, Arial;
       min-width: 0;
       min-height: 0;
+      font-family: system-ui, Segoe UI, Arial;
     }
 
     .topbar {
@@ -501,13 +600,9 @@ export default function App() {
     }
     .topnav-item.active { color: #1d4ed8; background: var(--primarySoft); }
 
-    /* Main layout:
-       - desktop: sidebar + content
-       - large desktop: slightly wider sidebar and content breathing room
-    */
     .main {
       display: grid;
-      grid-template-columns: ${isLargeDesktop ? "280px 1fr" : "250px 1fr"};
+      grid-template-columns: 260px 1fr;
       min-height: 0;
       min-width: 0;
     }
@@ -531,14 +626,15 @@ export default function App() {
     .side-item.active { color: #1d4ed8; background: var(--primarySoft); }
 
     .content {
-      padding: ${isLargeDesktop ? "18px 22px" : "14px 16px"};
+      padding: 12px 14px;
       min-height: 0;
       min-width: 0;
-
-      /* key: allow children to use height and fill the screen */
       display: flex;
       flex-direction: column;
       gap: 12px;
+
+      /* this is what makes it expand to full browser width */
+      width: 100%;
     }
 
     .pageHeader {
@@ -556,10 +652,9 @@ export default function App() {
       border: 1px solid var(--border);
       border-radius: 14px;
       box-shadow: var(--shadow);
-
-      /* key: card can expand */
       min-height: 0;
       min-width: 0;
+      width: 100%;
     }
 
     .btn-primary {
@@ -599,17 +694,13 @@ export default function App() {
 
     .subtle { font-size: 12px; color: var(--muted); }
 
-    /* Filters: desktop uses a wider grid, large desktop uses more columns */
     .filters {
       display: grid;
-      grid-template-columns: ${isLargeDesktop
-        ? "minmax(260px, 1fr) 200px 180px 180px auto"
-        : "minmax(220px, 1fr) 180px 160px 160px auto"};
+      grid-template-columns: minmax(220px, 1fr) 180px 160px 160px auto;
       gap: 10px;
       align-items: center;
     }
 
-    /* List page layout: filters + grid fill remaining height */
     .listCard {
       padding: 12px;
       display: flex;
@@ -618,13 +709,14 @@ export default function App() {
       flex: 1;
       min-height: 0;
     }
+
     .gridWrap {
       flex: 1;
-      min-height: 360px;
+      min-height: 0;
       min-width: 0;
+      height: 100%;
     }
 
-    /* Detail page: header + summary + grid fill remaining height */
     .detailHeader {
       display: flex;
       justify-content: space-between;
@@ -637,6 +729,7 @@ export default function App() {
       display: grid;
       grid-template-columns: repeat(3, minmax(180px, 1fr));
       gap: 12px;
+      width: 100%;
     }
 
     .detailCard {
@@ -649,11 +742,17 @@ export default function App() {
     }
 
     .detailToolbar {
-      display: flex;
-      justify-content: space-between;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .toolbarRight {
+      display: grid;
+      grid-template-columns: 1fr auto auto auto;
+      gap: 10px;
       align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
     }
 
     .pill {
@@ -665,7 +764,13 @@ export default function App() {
       font-size: 12px;
     }
 
-    /* Drawer behavior for phone/tablet */
+    @media (max-width: 1024px) {
+      .detailToolbar { grid-template-columns: 1fr; }
+      .toolbarRight { grid-template-columns: 1fr 1fr; }
+      .filters { grid-template-columns: 1fr 1fr; }
+      .summaryGrid { grid-template-columns: 1fr; }
+    }
+
     @media (max-width: 768px) {
       .hamburger { display: inline-flex; }
       .main { grid-template-columns: 1fr; }
@@ -692,17 +797,7 @@ export default function App() {
         background: rgba(15, 23, 42, 0.25);
         z-index: 10;
       }
-
       .content { padding: 12px; }
-
-      .filters { grid-template-columns: 1fr 1fr; }
-
-      .summaryGrid { grid-template-columns: 1fr; }
-
-      .gridWrap { min-height: 420px; } /* phone: keep grid usable */
-    }
-
-    @media (max-width: 480px) {
       .filters { grid-template-columns: 1fr; }
     }
   `;
@@ -715,11 +810,7 @@ export default function App() {
         {/* Top bar */}
         <div className="topbar">
           <div className="leftTop">
-            <button
-              className="hamburger"
-              onClick={() => setSidebarOpen((v) => !v)}
-              title="Menu"
-            >
+            <button className="hamburger" onClick={() => setSidebarOpen((v) => !v)} title="Menu">
               ☰
             </button>
 
@@ -736,7 +827,6 @@ export default function App() {
                   onClick={() => {
                     setTopNav(t);
                     if (t === "Estimates") setView("EstimatesList");
-                    else setView("EstimatesList");
                     if (isDrawer) setSidebarOpen(false);
                   }}
                 >
@@ -769,21 +859,13 @@ export default function App() {
 
         {/* Main */}
         <div className="main">
-          {/* Overlay for drawer */}
           {isDrawer && sidebarOpen && (
             <div className="overlay" onClick={() => setSidebarOpen(false)} />
           )}
 
           {/* Sidebar */}
           <div className={`sidebar ${sidebarOpen ? "open" : ""}`}>
-            <div
-              className="side-item"
-              onClick={() => {
-                setTopNav("Dashboard");
-                setView("EstimatesList");
-                if (isDrawer) setSidebarOpen(false);
-              }}
-            >
+            <div className="side-item" onClick={() => alert("PoC: Dashboard not implemented")}>
               ▢ Dashboard
             </div>
 
@@ -798,21 +880,40 @@ export default function App() {
               ▦ Estimates
             </div>
 
-            <div className="side-item" onClick={() => alert("PoC: not implemented")}>
+            <div className="side-item" onClick={() => alert("PoC: Reports not implemented")}>
               ▤ Reports
             </div>
 
-            <div className="side-item" onClick={() => alert("PoC: not implemented")}>
-              ◷ Analytics
-            </div>
-
-            <div className="side-item" onClick={() => alert("PoC: not implemented")}>
+            <div className="side-item" onClick={() => alert("PoC: Settings not implemented")}>
               ⚙ Settings
             </div>
 
             <div style={{ marginTop: 10 }} className="subtle">
-              PoC: localStorage only
+              PoC: data is saved in browser localStorage
             </div>
+
+            <button
+              className="btn-ghost"
+              style={{ marginTop: 10, width: "100%" }}
+              onClick={() => {
+                localStorage.removeItem(LS_HEADERS);
+                // wipe all known estimates lines by wiping prefix keys (simple approach: full clear PoC)
+                // safer for PoC: clear everything we wrote
+                Object.keys(localStorage)
+                  .filter((k) => k.startsWith(LS_LINES_PREFIX) || k === LS_SEEDED)
+                  .forEach((k) => localStorage.removeItem(k));
+                localStorage.removeItem(LS_SEEDED);
+                seedIfNeeded();
+                setHeaders(loadHeaders());
+                const first = loadHeaders()[0]?.estimateId ?? null;
+                setSelectedEstimateId(first);
+                setLines(first ? loadLines(first) : []);
+                setView("EstimatesList");
+                alert("Reset sample data.");
+              }}
+            >
+              Reset Sample Data
+            </button>
           </div>
 
           {/* Content */}
@@ -822,10 +923,7 @@ export default function App() {
               <>
                 <div className="pageHeader">
                   <div className="title">Estimates</div>
-                  <button
-                    className="btn-primary"
-                    onClick={() => setView("CreateEstimate")}
-                  >
+                  <button className="btn-primary" onClick={() => setView("CreateEstimate")}>
                     Create Estimate
                   </button>
                 </div>
@@ -900,7 +998,7 @@ export default function App() {
                   </div>
 
                   <div className="subtle">
-                    Tip: Filter by **Completed** to see closed-out estimates. Click any row to open and edit.
+                    Click an estimate row to open the Excel-like line-entry grid.
                   </div>
                 </div>
               </>
@@ -916,7 +1014,7 @@ export default function App() {
                   </button>
                 </div>
 
-                <div className="card" style={{ padding: 14, maxWidth: isSmallDesktop ? 880 : 980 }}>
+                <div className="card" style={{ padding: 14, maxWidth: 980 }}>
                   <div style={{ display: "grid", gap: 12 }}>
                     <div style={{ display: "grid", gap: 6 }}>
                       <div style={{ fontWeight: 900, fontSize: 13 }}>Client</div>
@@ -940,14 +1038,14 @@ export default function App() {
 
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                       <button className="btn-primary" onClick={createEstimate}>
-                        Create
+                        Create (pre-fills 25 lines)
                       </button>
                       <button className="btn-ghost" onClick={() => setView("EstimatesList")}>
                         Cancel
                       </button>
                     </div>
 
-                    <div className="subtle">Creates a Draft estimate in localStorage.</div>
+                    <div className="subtle">Creates a Draft estimate with sample lines.</div>
                   </div>
                 </div>
               </>
@@ -957,7 +1055,7 @@ export default function App() {
             {view === "EstimateDetail" && selectedHeader && (
               <>
                 <div className="detailHeader">
-                  <div style={{ display: "grid", gap: 4 }}>
+                  <div style={{ display: "grid", gap: 4, minWidth: 260 }}>
                     <div style={{ fontSize: 13, color: "#64748b", fontWeight: 900 }}>
                       ID {selectedHeader.estimateId}
                     </div>
@@ -1009,7 +1107,9 @@ export default function App() {
                         className="select"
                         style={{ width: 180 }}
                         value={selectedHeader.status}
-                        onChange={(e) => updateHeader(selectedHeader.estimateId, { status: e.target.value as Status })}
+                        onChange={(e) =>
+                          updateHeader(selectedHeader.estimateId, { status: e.target.value as Status })
+                        }
                         title="Change status"
                       >
                         <option value="Draft">Draft</option>
@@ -1023,12 +1123,37 @@ export default function App() {
 
                 <div className="card detailCard">
                   <div className="detailToolbar">
-                    <div style={{ fontWeight: 900 }}>Estimate Line Items</div>
-                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                      <button className="btn-ghost" onClick={exportDetailCsv}>Export</button>
-                      <button className="btn-ghost" onClick={deleteSelectedLines}>Delete</button>
-                      <button className="btn-primary" onClick={addLine}>Add Item</button>
-                      <button className="btn-primary" onClick={saveCurrentEstimate}>Save</button>
+                    <div style={{ fontWeight: 900 }}>
+                      Estimate Line Items (Excel-style) — page size {PAGE_SIZE}
+                      <div className="subtle">Double-click to edit. Changes auto-save.</div>
+                    </div>
+
+                    {/* Right: Add item + action buttons */}
+                    <div className="toolbarRight">
+                      <select
+                        className="select"
+                        value={selectedItemCode}
+                        onChange={(e) => setSelectedItemCode(e.target.value)}
+                        title="Select an item to add"
+                      >
+                        {items.map((it) => (
+                          <option key={it.itemCode} value={it.itemCode}>
+                            {it.itemCode} — {it.description} ({it.uom})
+                          </option>
+                        ))}
+                      </select>
+
+                      <button className="btn-primary" onClick={addItemLine} title="Adds selected item as a new line">
+                        Add Item
+                      </button>
+
+                      <button className="btn-ghost" onClick={addBlankLine} title="Adds an empty editable row">
+                        Add Blank
+                      </button>
+
+                      <button className="btn-ghost" onClick={exportDetailCsv}>
+                        Export
+                      </button>
                     </div>
                   </div>
 
@@ -1040,16 +1165,45 @@ export default function App() {
                         defaultColDef={{ resizable: true, sortable: true, filter: true }}
                         rowSelection="multiple"
                         getRowId={(p) => p.data.lineId}
-                        singleClickEdit={true}
+                        singleClickEdit={false}
                         stopEditingWhenCellsLoseFocus={true}
-                        onGridReady={(e) => (detailApiRef.current = e.api)}
-                        onCellValueChanged={() => updateHeader(selectedHeader.estimateId, {})}
+                        pagination={true}
+                        paginationPageSize={PAGE_SIZE}
+                        onGridReady={(e) => {
+                          detailApiRef.current = e.api;
+                          // Ensure it sizes to full width on load
+                          setTimeout(() => e.api.sizeColumnsToFit(), 50);
+                        }}
+                        onFirstDataRendered={(e) => {
+                          // Fit columns to available width (desktop + resize-friendly)
+                          e.api.sizeColumnsToFit();
+                        }}
+                        onGridSizeChanged={(e) => {
+                          // Make it expand when browser resizes
+                          e.api.sizeColumnsToFit();
+                        }}
+                        onCellValueChanged={() => {
+                          // Auto-save on any edit
+                          if (!selectedEstimateId) return;
+                          saveLines(selectedEstimateId, lines);
+                          updateHeader(selectedHeader.estimateId, {});
+                        }}
+                        onRowValueChanged={() => {
+                          if (!selectedEstimateId) return;
+                          saveLines(selectedEstimateId, lines);
+                          updateHeader(selectedHeader.estimateId, {});
+                        }}
                       />
                     </div>
                   </div>
 
-                  <div className="subtle">
-                    Completed estimates are still editable in this PoC (front-end only). Later we can lock editing based on status.
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                    <div className="subtle">
+                      Select rows and use the grid’s built-in filter/sort. Multi-select rows to delete.
+                    </div>
+                    <button className="btn-ghost" onClick={deleteSelectedLines}>
+                      Delete Selected
+                    </button>
                   </div>
                 </div>
               </>
