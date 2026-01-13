@@ -11,25 +11,6 @@ type TopNav = "Dashboard" | "Estimates" | "Reports" | "Settings";
 type View = "EstimatesList" | "EstimateDetail" | "CreateEstimate";
 type Status = "Draft" | "Submitted" | "Approved" | "Completed";
 
-<div className="card" style={{ padding: 12 }}>
-  <div style={{ fontWeight: 900, marginBottom: 8 }}>AG Grid Render Test</div>
-
-  <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
-  <AgGridReact
-    rowData={rowData}
-    columnDefs={columnDefs}
-    defaultColDef={{
-      editable: true,
-      resizable: true,
-      sortable: true,
-      filter: true
-    }}
-    pagination={true}
-    paginationPageSize={20}
-  />
-</div>
-
-</div>
 
 
 
