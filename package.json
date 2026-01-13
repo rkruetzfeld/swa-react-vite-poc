@@ -7,7 +7,8 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "generate:data": "node scripts/generate-sample-data.mjs"
   },
   "dependencies": {
     "ag-grid-community": "^35.0.0",
