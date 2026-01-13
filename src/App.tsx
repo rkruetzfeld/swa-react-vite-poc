@@ -61,31 +61,66 @@ function parseDateOnlyToRangeEnd(yyyyMmDd: string): Date | null {
   return new Date(y, m - 1, d, 23, 59, 59, 999);
 }
 
+/**
+ * Higher-contrast, smaller status pill for grid cells.
+ * - fits comfortably in default AG row height
+ * - readable on dark/light
+ */
 function StatusPill({ value }: { value: Status }) {
   const v = value;
-  const colors =
+
+  // Stronger contrast palette
+  const theme =
     v === "Draft"
-      ? { bg: "rgba(34,211,238,0.18)", fg: "rgba(186,230,253,0.98)", border: "rgba(34,211,238,0.25)" }
+      ? {
+          bg: "rgba(56, 189, 248, 0.22)", // cyan
+          fg: "rgba(224, 242, 254, 0.98)",
+          border: "rgba(56, 189, 248, 0.55)"
+        }
       : v === "Submitted"
-      ? { bg: "rgba(245,158,11,0.18)", fg: "rgba(253,230,138,0.98)", border: "rgba(245,158,11,0.25)" }
+      ? {
+          bg: "rgba(251, 191, 36, 0.22)", // amber
+          fg: "rgba(255, 251, 235, 0.98)",
+          border: "rgba(251, 191, 36, 0.60)"
+        }
       : v === "Approved"
-      ? { bg: "rgba(34,197,94,0.18)", fg: "rgba(187,247,208,0.98)", border: "rgba(34,197,94,0.25)" }
-      : { bg: "rgba(148,163,184,0.18)", fg: "rgba(226,232,240,0.98)", border: "rgba(148,163,184,0.22)" };
+      ? {
+          bg: "rgba(34, 197, 94, 0.20)", // green
+          fg: "rgba(240, 253, 244, 0.98)",
+          border: "rgba(34, 197, 94, 0.58)"
+        }
+      : v === "Completed"
+      ? {
+          bg: "rgba(148, 163, 184, 0.22)", // slate
+          fg: "rgba(241, 245, 249, 0.98)",
+          border: "rgba(148, 163, 184, 0.55)"
+        }
+      : {
+          bg: "rgba(148, 163, 184, 0.18)",
+          fg: "rgba(241, 245, 249, 0.98)",
+          border: "rgba(148, 163, 184, 0.45)"
+        };
 
   return (
     <span
       style={{
         display: "inline-flex",
         alignItems: "center",
-        padding: "3px 10px",
+        justifyContent: "center",
+        height: 22, // smaller
+        padding: "0 10px",
         borderRadius: 999,
-        fontWeight: 950,
+        fontWeight: 900,
         fontSize: 12,
-        background: colors.bg,
-        color: colors.fg,
-        border: `1px solid ${colors.border}`,
+        lineHeight: "22px",
+        background: theme.bg,
+        color: theme.fg,
+        border: `1px solid ${theme.border}`,
+        boxShadow: "0 1px 0 rgba(0,0,0,0.25)",
         whiteSpace: "nowrap"
       }}
+      aria-label={`Status: ${v}`}
+      title={v}
     >
       {v}
     </span>
@@ -107,7 +142,6 @@ function savePins(pins: Set<PinKey>) {
 }
 
 export default function App() {
-  // viewport
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
     const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
@@ -119,13 +153,11 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
   useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
 
-  // Nav state
   const [area, setArea] = useState<TopArea>("Forms");
   const [formsExpanded, setFormsExpanded] = useState(true);
   const [formsPage, setFormsPage] = useState<FormsPage>("Estimates");
   const [view, setView] = useState<View>("EstimatesList");
 
-  // pins
   const [pins, setPins] = useState<Set<PinKey>>(() => loadPins());
   useEffect(() => savePins(pins), [pins]);
   function togglePin(key: PinKey) {
@@ -137,7 +169,6 @@ export default function App() {
     });
   }
 
-  // data
   const [headers, setHeaders] = useState<EstimateHeader[]>([]);
   const [items, setItems] = useState<ItemCatalog[]>([]);
   const [linesByEstimate, setLinesByEstimate] = useState<Map<string, EstimateLine[]>>(new Map());
@@ -152,7 +183,6 @@ export default function App() {
   const listApiRef = useRef<GridApi | null>(null);
   const detailApiRef = useRef<GridApi | null>(null);
 
-  // filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | Status>("All");
   const [fromDate, setFromDate] = useState(() => {
@@ -162,7 +192,6 @@ export default function App() {
   });
   const [toDate, setToDate] = useState(() => toIsoDateOnly(new Date()));
 
-  // item selector
   const [selectedItemCode, setSelectedItemCode] = useState<string>("");
 
   const itemByCode = useMemo(() => new Map(items.map((i) => [i.costCode, i])), [items]);
@@ -197,7 +226,6 @@ export default function App() {
     return [pinned];
   }, [estimateTotal]);
 
-  // initial load
   useEffect(() => {
     let cancelled = false;
     async function loadAll() {
@@ -512,7 +540,6 @@ export default function App() {
           <div className="sidebar">
             <div className="sectionTitle">Navigation</div>
 
-            {/* Forms (expand/collapse) */}
             <button
               className={`navBtn ${area === "Forms" ? "navBtnActive" : ""}`}
               onClick={() => {
@@ -545,18 +572,17 @@ export default function App() {
               </div>
             )}
 
-            {/* Reports */}
             <button className={`navBtn ${area === "Reports" ? "navBtnActive" : ""}`} style={{ marginTop: 10 }} onClick={() => setArea("Reports")}>
               Reports
             </button>
 
-            {/* Dashboards */}
             <button className={`navBtn ${area === "Dashboards" ? "navBtnActive" : ""}`} style={{ marginTop: 10 }} onClick={() => setArea("Dashboards")}>
               Dashboards
             </button>
 
-            {/* Pinned shortcuts (always visible, typical pattern) */}
-            <div className="sectionTitle" style={{ marginTop: 18 }}>Pinned</div>
+            <div className="sectionTitle" style={{ marginTop: 18 }}>
+              Pinned
+            </div>
             <div className="navIndented">
               {pins.size === 0 && <div className="kicker">Pin Estimates/Forecast to keep them here.</div>}
 
@@ -632,18 +658,7 @@ export default function App() {
                 <div className="agHost ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
                   <AgGridReact<EstimateHeader>
                     rowData={filteredHeaders}
-                    columnDefs={detailApiRef.current ? [] : undefined}
-                    columnDefs={(() => {
-                      return [
-                        { field: "estimateId", headerName: "ID", width: 90 },
-                        { field: "client", headerName: "Client", flex: 1, minWidth: 220 },
-                        { field: "title", headerName: "Title", flex: 1, minWidth: 240 },
-                        { field: "dateCreated", headerName: "Date Created", width: 140, valueFormatter: (p) => formatDate(String(p.value || "")) },
-                        { field: "status", headerName: "Status", width: 150, cellRenderer: (p: any) => <StatusPill value={p.value as Status} /> },
-                        { field: "dueDate", headerName: "Due Date", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) },
-                        { field: "lastUpdated", headerName: "Updated", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) }
-                      ] as ColDef<EstimateHeader>[];
-                    })()}
+                    columnDefs={estimatesListCols}
                     defaultColDef={{ resizable: true, sortable: true, filter: true }}
                     rowSelection="single"
                     onGridReady={(e) => {
@@ -679,12 +694,18 @@ export default function App() {
                   <div style={{ fontWeight: 950 }}>Total: {formatCurrencyCAD(estimateTotal)}</div>
 
                   {selectedHeader.status === "Draft" ? (
-                    <button className="primaryBtn" onClick={submitEstimate}>Submit</button>
+                    <button className="primaryBtn" onClick={submitEstimate}>
+                      Submit
+                    </button>
                   ) : selectedHeader.status === "Submitted" ? (
-                    <button className="primaryBtn" onClick={returnToDraft}>Approve / Return</button>
+                    <button className="primaryBtn" onClick={returnToDraft}>
+                      Approve / Return
+                    </button>
                   ) : null}
 
-                  <button className="ghostBtn" onClick={() => setView("EstimatesList")}>Back</button>
+                  <button className="ghostBtn" onClick={() => setView("EstimatesList")}>
+                    Back
+                  </button>
                 </div>
               </div>
 
