@@ -1,42 +1,38 @@
-/* src/index.css */
-/* Make the app use the full browser area and behave well with AG Grid */
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 
-html,
-body,
-#root {
+  --bg0: #0b1220;
+  --bg1: #0e172a;
+  --panel: rgba(255, 255, 255, 0.06);
+  --panel2: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.10);
+  --text: rgba(255, 255, 255, 0.92);
+  --muted: rgba(255, 255, 255, 0.62);
+  --accent: #3b82f6; /* blue */
+  --accent2: #60a5fa;
+}
+
+html, body, #root {
   height: 100%;
   width: 100%;
   margin: 0;
 }
 
 body {
-  overflow: hidden; /* prevent page scrollbars; grids scroll internally */
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
-  background: #f8fafc;
-  color: #0f172a;
+  background: radial-gradient(1200px 600px at 20% 0%, rgba(59, 130, 246, 0.22), transparent 60%),
+              radial-gradient(900px 500px at 90% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
+              linear-gradient(180deg, var(--bg0), var(--bg1));
+  color: var(--text);
 }
 
-/* Ensure consistent sizing */
-*,
-*::before,
-*::after {
-  box-sizing: border-box;
-}
+* { box-sizing: border-box; }
 
-/* Optional: nicer focus */
-:focus-visible {
-  outline: 2px solid #3b82f6;
-  outline-offset: 2px;
-}
+a { color: inherit; text-decoration: none; }
 
-/* Optional: links */
-a {
-  color: inherit;
-  text-decoration: none;
+button, input, select {
+  font: inherit;
 }
-a:hover {
-  text-decoration: underline;
-}
-
-/* If you still want dark-mode support later, do it explicitly in the app.
-   Don’t use Vite’s default color-scheme centering template. */
