@@ -7,12 +7,19 @@ import type {
   ValueParserParams
 } from "ag-grid-community";
 
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
-
 type TopNav = "Dashboard" | "Estimates" | "Reports" | "Settings";
 type View = "EstimatesList" | "EstimateDetail" | "CreateEstimate";
 type Status = "Draft" | "Submitted" | "Approved" | "Completed";
+
+<div className="card" style={{ padding: 12 }}>
+  <div style={{ fontWeight: 900, marginBottom: 8 }}>AG Grid Render Test</div>
+
+  <div className="ag-theme-quartz" style={{ height: 320, width: "100%" }}>
+    <AgGridReact rowData={testRows} columnDefs={testCols as any} />
+  </div>
+</div>
+
+
 
 type EstimateHeader = {
   estimateId: string;
@@ -47,6 +54,19 @@ const LS_LINES_PREFIX = "poc_estimate_lines_v6__";
 const LS_SEEDED = "poc_seeded_v6";
 
 const PAGE_SIZE = 20;
+
+const testRows = [
+  { a: "Row 1", b: 10, c: "Open" },
+  { a: "Row 2", b: 20, c: "Draft" },
+];
+
+const testCols = [
+  { field: "a", headerName: "Col A" },
+  { field: "b", headerName: "Col B" },
+  { field: "c", headerName: "Status" },
+];
+
+
 
 function uuid(): string {
   return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
