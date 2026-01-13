@@ -1,6 +1,4 @@
 // src/services/estimateDataService.ts
-// Runtime data loader (today: /sample-data; later: swap BASE to /api)
-
 import type { EstimateHeader, EstimateLine, ItemCatalog } from "../models/estimateModels";
 
 type Cache = {
@@ -13,7 +11,7 @@ const cache: Cache = {
   linesByEstimate: new Map<string, EstimateLine[]>()
 };
 
-// ✅ Later change this to "/api" (and keep UI unchanged)
+// Later: switch BASE to "/api" without changing UI code
 const BASE = "/sample-data";
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -42,16 +40,13 @@ export const estimateDataService = {
       const existing = cache.linesByEstimate.get(estimateId);
       if (existing) return existing;
     }
-
     const data = await fetchJson<EstimateLine[]>(
       `${BASE}/estimate-lines/${encodeURIComponent(estimateId)}.json`
     );
-
     cache.linesByEstimate.set(estimateId, data);
     return data;
   },
 
-  // Optional helper if you later implement “refresh”
   clearCache(): void {
     cache.headers = undefined;
     cache.items = undefined;

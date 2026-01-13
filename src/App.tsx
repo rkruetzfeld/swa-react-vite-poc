@@ -2,40 +2,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
 
-type Status = "Draft" | "Submitted" | "Approved" | "Completed";
-
-type EstimateHeader = {
-  estimateId: string;
-  client: string;
-  title: string;
-  status: Status;
-  dateCreated: string; // ISO
-  dueDate: string; // ISO
-  lastUpdated: string; // ISO
-};
-
-type EstimateLine = {
-  lineId: string;
-  lineNo: number;
-  section: string;
-  costCode: string;
-  description: string;
-  uom: string;
-  qty: number;
-  unitRate: number;
-  notes?: string;
-};
-
-type ItemCatalog = {
-  section: string;
-  costCode: string;
-  description: string;
-  uom: string;
-  defaultUnitRate: number;
-};
+import type { EstimateHeader, EstimateLine, ItemCatalog, Status } from "./models/estimateModels";
+import { estimateDataService } from "./services/estimateDataService";
 
 const PAGE_SIZE = 20;
-const COST_CODE_REGEX = /^\d{2}-[A-Z]{3,10}-\d{3}-\d{3}$/;
 const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
 function uuid(): string {
@@ -113,104 +83,41 @@ function StatusPill(props: { value: Status }) {
   );
 }
 
-/** Small but realistic catalog */
-const ITEM_CATALOG: ItemCatalog[] = [
-  { section: "Mobilization", costCode: "60-MOB-100-001", description: "Mobilization (LS)", uom: "LS", defaultUnitRate: 35000 },
-  { section: "Earthworks", costCode: "60-EARTH-210-010", description: "Excavation (m3)", uom: "m3", defaultUnitRate: 18.5 },
-  { section: "Earthworks", costCode: "60-EARTH-220-020", description: "Fill import & place (m3)", uom: "m3", defaultUnitRate: 24.0 },
-  { section: "Drainage", costCode: "60-DRAIN-310-005", description: "Culvert supply & install (m)", uom: "m", defaultUnitRate: 420.0 },
-  { section: "Paving", costCode: "60-PAVE-410-030", description: "Asphalt paving (t)", uom: "t", defaultUnitRate: 155.0 },
-  { section: "Structures", costCode: "60-STR-510-001", description: "Concrete placement (m3)", uom: "m3", defaultUnitRate: 420.0 },
-  { section: "Traffic", costCode: "60-TRAF-610-010", description: "Traffic control (day)", uom: "day", defaultUnitRate: 3200.0 },
-  { section: "General", costCode: "60-GEN-900-001", description: "Project management (day)", uom: "day", defaultUnitRate: 1800.0 }
-];
-
-function seedHeaders(): EstimateHeader[] {
-  const today = new Date();
-  const mk = (id: number, client: string, title: string, status: Status, daysAgo: number, dueIn: number) => {
-    const created = new Date(today);
-    created.setDate(created.getDate() - daysAgo);
-    const due = new Date(created);
-    due.setDate(due.getDate() + dueIn);
-    return {
-      estimateId: String(id),
-      client,
-      title,
-      status,
-      dateCreated: created.toISOString(),
-      dueDate: due.toISOString(),
-      lastUpdated: created.toISOString()
-    };
-  };
-
-  return [
-    mk(1574, "Custom Solutions Inc.", "Bridge deck rehab — Phase 1", "Approved", 18, 20),
-    mk(1563, "Camtom Syites", "Road widening — Segment B", "Submitted", 55, 30),
-    mk(1544, "Perichen Gretet", "Drainage improvements", "Draft", 7, 21),
-    mk(1523, "Gatom Sjites", "Estimate Retire", "Completed", 110, 10),
-    mk(1010, "Coculse Serviets", "Corridor pricing", "Completed", 250, 14)
-  ];
-}
-
-function seedLinesForEstimate(estimateId: string): EstimateLine[] {
-  // Give some estimates a larger dataset to mimic reality
-  const big = estimateId === "1574" || estimateId === "1523";
-  const count = big ? 180 : 35;
-
-  const rows: EstimateLine[] = [];
-  for (let i = 0; i < count; i++) {
-    const it = ITEM_CATALOG[i % ITEM_CATALOG.length];
-    rows.push({
-      lineId: uuid(),
-      lineNo: i + 1,
-      section: it.section,
-      costCode: it.costCode,
-      description: it.description,
-      uom: it.uom,
-      qty: big ? (i % 7) + 1 : (i % 4) + 1,
-      unitRate: it.defaultUnitRate,
-      notes: ""
-    });
-  }
-  return rows;
-}
-
 export default function App() {
-  // viewport flags
+  // viewport
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
     const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
+
   const isPhone = vp.w <= 480;
   const isTablet = vp.w > 480 && vp.w <= 900;
-  const isNarrow = vp.w <= 1024;
   const isDrawer = isPhone || isTablet;
+  const isNarrow = vp.w <= 1024;
 
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
   useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
 
-  // data (in-memory)
-  const [headers, setHeaders] = useState<EstimateHeader[]>(() => seedHeaders());
-  const [linesByEstimate, setLinesByEstimate] = useState<Map<string, EstimateLine[]>>(() => {
-    const m = new Map<string, EstimateLine[]>();
-    for (const h of seedHeaders()) m.set(h.estimateId, seedLinesForEstimate(h.estimateId));
-    return m;
-  });
+  // runtime data
+  const [headers, setHeaders] = useState<EstimateHeader[]>([]);
+  const [items, setItems] = useState<ItemCatalog[]>([]);
+  const [linesByEstimate, setLinesByEstimate] = useState<Map<string, EstimateLine[]>>(new Map());
 
-  // selection + view
-  const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(() => seedHeaders()[0]?.estimateId ?? null);
-  const selectedHeader = useMemo(
-    () => headers.find((h) => h.estimateId === selectedEstimateId) ?? null,
-    [headers, selectedEstimateId]
-  );
+  // state
+  const [loadingHeaders, setLoadingHeaders] = useState(true);
+  const [loadingItems, setLoadingItems] = useState(true);
+  const [loadingLines, setLoadingLines] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
+  const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(null);
   const [view, setView] = useState<"EstimatesList" | "EstimateDetail">("EstimatesList");
+
   const listApiRef = useRef<GridApi | null>(null);
   const detailApiRef = useRef<GridApi | null>(null);
 
-  // list filters
+  // filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | Status>("All");
   const [fromDate, setFromDate] = useState(() => {
@@ -221,9 +128,14 @@ export default function App() {
   const [toDate, setToDate] = useState(() => toIsoDateOnly(new Date()));
 
   // detail add selector
-  const [selectedItemCode, setSelectedItemCode] = useState<string>(() => ITEM_CATALOG[0].costCode);
-  const itemByCode = useMemo(() => new Map(ITEM_CATALOG.map((i) => [i.costCode, i])), []);
-  const itemCodes = useMemo(() => ITEM_CATALOG.map((i) => i.costCode), []);
+  const [selectedItemCode, setSelectedItemCode] = useState<string>("");
+  const itemByCode = useMemo(() => new Map(items.map((i) => [i.costCode, i])), [items]);
+  const itemCodes = useMemo(() => items.map((i) => i.costCode), [items]);
+
+  const selectedHeader = useMemo(
+    () => headers.find((h) => h.estimateId === selectedEstimateId) ?? null,
+    [headers, selectedEstimateId]
+  );
 
   const currentLines = useMemo(() => {
     if (!selectedEstimateId) return [];
@@ -247,12 +159,65 @@ export default function App() {
       notes: ""
     };
     return [pinned];
+  }, [estimateTotal]);
+
+  // initial load
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadAll() {
+      try {
+        setError(null);
+
+        setLoadingHeaders(true);
+        const h = await estimateDataService.getEstimateHeaders();
+        if (cancelled) return;
+        setHeaders(h);
+        setSelectedEstimateId(h[0]?.estimateId ?? null);
+        setLoadingHeaders(false);
+
+        setLoadingItems(true);
+        const it = await estimateDataService.getItemCatalog();
+        if (cancelled) return;
+        setItems(it);
+        setSelectedItemCode(it[0]?.costCode ?? "");
+        setLoadingItems(false);
+      } catch (e: any) {
+        if (cancelled) return;
+        setError(e?.message ?? "Failed to load runtime JSON data.");
+        setLoadingHeaders(false);
+        setLoadingItems(false);
+      }
+    }
+
+    loadAll();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  function openEstimate(id: string) {
+  async function ensureLinesLoaded(estimateId: string) {
+    if (linesByEstimate.has(estimateId)) return;
+    setLoadingLines(true);
+    try {
+      const lines = await estimateDataService.getEstimateLines(estimateId);
+      setLinesByEstimate((prev) => {
+        const m = new Map(prev);
+        m.set(estimateId, lines);
+        return m;
+      });
+    } catch (e: any) {
+      setError(e?.message ?? `Failed to load lines for ${estimateId}`);
+    } finally {
+      setLoadingLines(false);
+    }
+  }
+
+  async function openEstimate(id: string) {
     setSelectedEstimateId(id);
     setView("EstimateDetail");
     if (isDrawer) setSidebarOpen(false);
+    await ensureLinesLoaded(id);
   }
 
   function nextLineNo(): number {
@@ -316,7 +281,9 @@ export default function App() {
   }
 
   function createEstimate() {
-    const nextId = String(Math.max(...headers.map((h) => Number(h.estimateId) || 0), 1000) + 1);
+    // front-end only; not persisted
+    const maxId = Math.max(...headers.map((h) => Number(h.estimateId) || 0), 1000);
+    const nextId = String(maxId + 1);
 
     const created = new Date();
     const due = new Date();
@@ -332,18 +299,17 @@ export default function App() {
       lastUpdated: created.toISOString()
     };
 
-    // Default 20 lines
     const initialLines: EstimateLine[] = Array.from({ length: 20 }).map((_, idx) => {
-      const it = ITEM_CATALOG[(idx + 1) % ITEM_CATALOG.length];
+      const it = items[(idx + 1) % Math.max(items.length, 1)];
       return {
         lineId: uuid(),
         lineNo: idx + 1,
-        section: it.section,
-        costCode: it.costCode,
-        description: it.description,
-        uom: it.uom,
+        section: it?.section ?? "General",
+        costCode: it?.costCode ?? "60-GEN-900-001",
+        description: it?.description ?? "New line item",
+        uom: it?.uom ?? "ea",
         qty: 1,
-        unitRate: it.defaultUnitRate,
+        unitRate: it?.defaultUnitRate ?? 0,
         notes: ""
       };
     });
@@ -407,9 +373,7 @@ export default function App() {
   const detailCols = useMemo<ColDef<EstimateLine>[]>(() => {
     return [
       { field: "section", headerName: "Section", rowGroup: true, hide: true },
-
       { field: "lineNo", headerName: "#", width: 70, editable: false },
-
       {
         field: "costCode",
         headerName: "Cost Code",
@@ -433,30 +397,11 @@ export default function App() {
             p.data.uom = found.uom;
             p.data.unitRate = found.defaultUnitRate;
             p.data.section = found.section;
-          } else {
-            p.data.section = "General";
           }
           return true;
-        },
-        cellClassRules: {
-          "cell-invalid": (p) => {
-            if (p.node.rowPinned) return false;
-            const v = String(p.value ?? "").trim().toUpperCase();
-            if (!v) return false;
-            return !COST_CODE_REGEX.test(v);
-          }
         }
       },
-
-      {
-        field: "description",
-        headerName: "Description",
-        editable: true,
-        flex: 1,
-        minWidth: 320,
-        cellStyle: (p) => (p.node.rowPinned ? { fontWeight: "900" } : undefined)
-      },
-
+      { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 320 },
       {
         field: "uom",
         headerName: "UOM",
@@ -465,7 +410,6 @@ export default function App() {
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: UOM_OPTIONS }
       },
-
       {
         field: "qty",
         headerName: "Qty",
@@ -478,7 +422,6 @@ export default function App() {
           return true;
         }
       },
-
       {
         field: "unitRate",
         headerName: "Unit Rate",
@@ -491,7 +434,6 @@ export default function App() {
           return true;
         }
       },
-
       {
         headerName: "Line Total",
         width: 170,
@@ -502,224 +444,181 @@ export default function App() {
         valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0),
         cellStyle: (p) => (p.node.rowPinned ? { fontWeight: "900" } : undefined)
       },
-
       { field: "notes", headerName: "Notes", editable: true, width: 240 }
     ];
   }, [estimateTotal, itemCodes, itemByCode]);
 
-  const styles = `
-    .cell-invalid {
-      background: #fee2e2 !important;
-      border: 1px solid #ef4444 !important;
-    }
-  `;
-
   return (
-    <>
-      <style>{styles}</style>
+    <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <div
+        style={{
+          padding: 10,
+          borderBottom: "1px solid #e5e7eb",
+          fontWeight: 900,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 10
+        }}
+      >
+        <div>Portal PoC — Runtime JSON data</div>
+        {view === "EstimatesList" && (
+          <button style={{ fontWeight: 900 }} onClick={createEstimate} disabled={loadingItems || loadingHeaders}>
+            Create Estimate
+          </button>
+        )}
+      </div>
 
-      <div style={{ height: "100%", display: "flex", flexDirection: "column" }}>
-        {/* Top bar */}
-        <div
-          style={{
-            padding: 10,
-            borderBottom: "1px solid #e5e7eb",
-            fontWeight: 900,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 10
-          }}
-        >
-          <div>Portal PoC — In-memory data (JSON later)</div>
-
-          {view === "EstimatesList" && (
-            <button style={{ fontWeight: 900 }} onClick={createEstimate}>
-              Create Estimate
-            </button>
-          )}
-        </div>
-
-        <div
-          style={{
-            flex: 1,
-            minHeight: 0,
-            display: "grid",
-            gridTemplateColumns: isDrawer ? "1fr" : "280px 1fr"
-          }}
-        >
-          {/* Sidebar */}
-          {!isDrawer || sidebarOpen ? (
-            <div style={{ borderRight: isDrawer ? "none" : "1px solid #e5e7eb", padding: 10 }}>
-              {isDrawer && (
-                <button
-                  style={{ marginBottom: 10, padding: "8px 10px", fontWeight: 900 }}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  Close
-                </button>
-              )}
-
-              <button
-                style={{ width: "100%", padding: "10px 12px", fontWeight: 900, marginBottom: 8 }}
-                onClick={() => setView("EstimatesList")}
-              >
-                Estimates
-              </button>
-
-              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
-                Next step: swap to runtime JSON under <code>/public/sample-data</code>.
-              </div>
-            </div>
-          ) : null}
-
-          {/* Content */}
-          <div style={{ minHeight: 0, padding: 10, display: "flex", flexDirection: "column", gap: 10 }}>
-            {isDrawer && !sidebarOpen && (
-              <button style={{ width: 120, padding: "8px 10px", fontWeight: 900 }} onClick={() => setSidebarOpen(true)}>
-                Menu
-              </button>
-            )}
-
-            {view === "EstimatesList" && (
-              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                {/* Filters */}
-                <div
-                  style={{
-                    display: "grid",
-                    gap: 8,
-                    gridTemplateColumns: isNarrow ? "1fr" : "1fr 180px 160px 160px"
-                  }}
-                >
-                  <input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    placeholder="Search…"
-                    style={{ padding: 10, fontWeight: 800 }}
-                  />
-
-                  <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value as any)}
-                    style={{ padding: 10, fontWeight: 800 }}
-                  >
-                    <option value="All">All Statuses</option>
-                    <option value="Draft">Draft</option>
-                    <option value="Submitted">Submitted</option>
-                    <option value="Approved">Approved</option>
-                    <option value="Completed">Completed</option>
-                  </select>
-
-                  <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={{ padding: 10, fontWeight: 800 }} />
-                  <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={{ padding: 10, fontWeight: 800 }} />
-                </div>
-
-                {/* Grid */}
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
-                    <AgGridReact<EstimateHeader>
-                      rowData={filteredHeaders}
-                      columnDefs={estimatesListCols}
-                      defaultColDef={{ resizable: true, sortable: true, filter: true }}
-                      rowSelection="single"
-                      onGridReady={(e) => {
-                        listApiRef.current = e.api;
-                        setTimeout(() => e.api.sizeColumnsToFit(), 50);
-                      }}
-                      onGridSizeChanged={(e) => e.api.sizeColumnsToFit()}
-                      onRowClicked={(e: RowClickedEvent<EstimateHeader>) => {
-                        const id = e.data?.estimateId;
-                        if (id) openEstimate(id);
-                      }}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {view === "EstimateDetail" && selectedHeader && (
-              <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                  <div style={{ fontWeight: 900 }}>
-                    {selectedHeader.estimateId} — {selectedHeader.client} ({selectedHeader.status})
-                    <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
-                      Created {formatDate(selectedHeader.dateCreated)} • Due {formatDate(selectedHeader.dueDate)}
-                    </div>
-                  </div>
-
-                  <div style={{ fontWeight: 900 }}>Total: {formatCurrencyCAD(estimateTotal)}</div>
-
-                  <button style={{ padding: "8px 10px", fontWeight: 900 }} onClick={() => setView("EstimatesList")}>
-                    Back
-                  </button>
-                </div>
-
-                {/* Toolbar */}
-                <div style={{ display: "grid", gap: 8, gridTemplateColumns: isNarrow ? "1fr" : "1fr 260px auto auto" }}>
-                  <select
-                    value={selectedItemCode}
-                    onChange={(e) => setSelectedItemCode(e.target.value)}
-                    style={{ padding: 10, fontWeight: 800 }}
-                  >
-                    {ITEM_CATALOG.map((it) => (
-                      <option key={it.costCode} value={it.costCode}>
-                        {it.costCode} — {it.description} ({it.uom})
-                      </option>
-                    ))}
-                  </select>
-
-                  <button style={{ padding: "10px 12px", fontWeight: 900 }} onClick={addItemLine}>
-                    Add Item
-                  </button>
-
-                  <button style={{ padding: "10px 12px", fontWeight: 900 }} onClick={deleteSelectedLines}>
-                    Delete Selected
-                  </button>
-                </div>
-
-                {/* Detail grid */}
-                <div style={{ flex: 1, minHeight: 0 }}>
-                  <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
-                    <AgGridReact<EstimateLine>
-                      rowData={currentLines}
-                      columnDefs={detailCols}
-                      getRowId={(p) => p.data.lineId}
-                      defaultColDef={{ resizable: true, sortable: true, filter: true, editable: true }}
-                      rowSelection="multiple"
-                      suppressRowClickSelection={true}
-                      groupDisplayType={"groupRows"}
-                      autoGroupColumnDef={{
-                        headerName: "Section",
-                        minWidth: 240,
-                        cellRendererParams: { suppressCount: false }
-                      }}
-                      groupDefaultExpanded={isPhone ? 0 : 1}
-                      pinnedBottomRowData={pinnedBottomRow}
-                      pagination={true}
-                      paginationPageSize={PAGE_SIZE}
-                      enterNavigatesVertically={true}
-                      enterNavigatesVerticallyAfterEdit={true}
-                      stopEditingWhenCellsLoseFocus={true}
-                      undoRedoCellEditing={true}
-                      undoRedoCellEditingLimit={50}
-                      enableRangeSelection={true}
-                      suppressClipboardPaste={false}
-                      processDataFromClipboard={(params) => params.data}
-                      onGridReady={(e) => {
-                        detailApiRef.current = e.api;
-                        setTimeout(() => e.api.sizeColumnsToFit(), 80);
-                      }}
-                      onGridSizeChanged={(e) => e.api.sizeColumnsToFit()}
-                    />
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!selectedHeader && <div style={{ fontWeight: 900, padding: 10 }}>No estimate selected.</div>}
+      {error && (
+        <div style={{ padding: 10, background: "#fee2e2", borderBottom: "1px solid #fecaca", fontWeight: 900 }}>
+          Error: {error}
+          <div style={{ fontWeight: 700, marginTop: 6, fontSize: 12 }}>
+            Quick check: open <code>/sample-data/estimates.json</code> in the browser and confirm it loads.
           </div>
         </div>
+      )}
+
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          display: "grid",
+          gridTemplateColumns: isDrawer ? "1fr" : "280px 1fr"
+        }}
+      >
+        {!isDrawer || sidebarOpen ? (
+          <div style={{ borderRight: isDrawer ? "none" : "1px solid #e5e7eb", padding: 10 }}>
+            {isDrawer && (
+              <button style={{ marginBottom: 10, padding: "8px 10px", fontWeight: 900 }} onClick={() => setSidebarOpen(false)}>
+                Close
+              </button>
+            )}
+
+            <button style={{ width: "100%", padding: "10px 12px", fontWeight: 900, marginBottom: 8 }} onClick={() => setView("EstimatesList")}>
+              Estimates
+            </button>
+
+            <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
+              Data files: <code>/public/sample-data</code>
+            </div>
+          </div>
+        ) : null}
+
+        <div style={{ minHeight: 0, padding: 10, display: "flex", flexDirection: "column", gap: 10 }}>
+          {isDrawer && !sidebarOpen && (
+            <button style={{ width: 120, padding: "8px 10px", fontWeight: 900 }} onClick={() => setSidebarOpen(true)}>
+              Menu
+            </button>
+          )}
+
+          {(loadingHeaders || loadingItems) && <div style={{ padding: 10, fontWeight: 900 }}>Loading runtime JSON…</div>}
+
+          {view === "EstimatesList" && !loadingHeaders && (
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "grid", gap: 8, gridTemplateColumns: isNarrow ? "1fr" : "1fr 180px 160px 160px" }}>
+                <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" style={{ padding: 10, fontWeight: 800 }} />
+
+                <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} style={{ padding: 10, fontWeight: 800 }}>
+                  <option value="All">All Statuses</option>
+                  <option value="Draft">Draft</option>
+                  <option value="Submitted">Submitted</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Completed">Completed</option>
+                </select>
+
+                <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} style={{ padding: 10, fontWeight: 800 }} />
+                <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)} style={{ padding: 10, fontWeight: 800 }} />
+              </div>
+
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
+                  <AgGridReact<EstimateHeader>
+                    rowData={filteredHeaders}
+                    columnDefs={estimatesListCols}
+                    defaultColDef={{ resizable: true, sortable: true, filter: true }}
+                    rowSelection="single"
+                    onGridReady={(e) => {
+                      listApiRef.current = e.api;
+                      setTimeout(() => e.api.sizeColumnsToFit(), 50);
+                    }}
+                    onGridSizeChanged={(e) => e.api.sizeColumnsToFit()}
+                    onRowClicked={async (e: RowClickedEvent<EstimateHeader>) => {
+                      const id = e.data?.estimateId;
+                      if (id) await openEstimate(id);
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {view === "EstimateDetail" && selectedHeader && (
+            <div style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 10 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontWeight: 900 }}>
+                  {selectedHeader.estimateId} — {selectedHeader.client} ({selectedHeader.status})
+                  <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
+                    Created {formatDate(selectedHeader.dateCreated)} • Due {formatDate(selectedHeader.dueDate)}
+                  </div>
+                </div>
+
+                <div style={{ fontWeight: 900 }}>Total: {formatCurrencyCAD(estimateTotal)}</div>
+
+                <button style={{ padding: "8px 10px", fontWeight: 900 }} onClick={() => setView("EstimatesList")}>
+                  Back
+                </button>
+              </div>
+
+              {loadingLines && <div style={{ padding: 10, fontWeight: 900 }}>Loading estimate lines…</div>}
+
+              <div style={{ display: "grid", gap: 8, gridTemplateColumns: isNarrow ? "1fr" : "1fr 160px 160px" }}>
+                <select value={selectedItemCode} onChange={(e) => setSelectedItemCode(e.target.value)} style={{ padding: 10, fontWeight: 800 }}>
+                  {items.map((it) => (
+                    <option key={it.costCode} value={it.costCode}>
+                      {it.costCode} — {it.description} ({it.uom})
+                    </option>
+                  ))}
+                </select>
+
+                <button style={{ padding: "10px 12px", fontWeight: 900 }} onClick={addItemLine} disabled={!selectedItemCode}>
+                  Add Item
+                </button>
+
+                <button style={{ padding: "10px 12px", fontWeight: 900 }} onClick={deleteSelectedLines}>
+                  Delete Selected
+                </button>
+              </div>
+
+              <div style={{ flex: 1, minHeight: 0 }}>
+                <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
+                  <AgGridReact<EstimateLine>
+                    rowData={currentLines}
+                    columnDefs={detailCols}
+                    getRowId={(p) => p.data.lineId}
+                    defaultColDef={{ resizable: true, sortable: true, filter: true, editable: true }}
+                    rowSelection="multiple"
+                    suppressRowClickSelection={true}
+                    pinnedBottomRowData={pinnedBottomRow}
+                    pagination={true}
+                    paginationPageSize={PAGE_SIZE}
+                    enterNavigatesVertically={true}
+                    enterNavigatesVerticallyAfterEdit={true}
+                    stopEditingWhenCellsLoseFocus={true}
+                    undoRedoCellEditing={true}
+                    undoRedoCellEditingLimit={50}
+                    enableRangeSelection={true}
+                    onGridReady={(e) => {
+                      detailApiRef.current = e.api;
+                      setTimeout(() => e.api.sizeColumnsToFit(), 80);
+                    }}
+                    onGridSizeChanged={(e) => e.api.sizeColumnsToFit()}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-    </>
+    </div>
   );
 }

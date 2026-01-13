@@ -7,9 +7,9 @@ export type EstimateHeader = {
   client: string;
   title: string;
   status: Status;
-  dateCreated: string; // ISO string
-  dueDate: string; // ISO string
-  lastUpdated: string; // ISO string
+  dateCreated: string; // ISO
+  dueDate: string; // ISO
+  lastUpdated: string; // ISO
 };
 
 export type EstimateLine = {
