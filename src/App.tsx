@@ -1,26 +1,46 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type {
-  ColDef,
-  GridApi,
-  RowClickedEvent,
-  ValueParserParams
-} from "ag-grid-community";
+import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
 
-import {
-  estimateDataService,
-  EstimateHeader,
-  EstimateLine,
-  ItemCatalog,
-  Status
-} from "./services/estimateDataService";
+type Status = "Draft" | "Submitted" | "Approved" | "Completed";
 
-import { StatusPill } from "./components/StatusPill";
+type EstimateHeader = {
+  estimateId: string;
+  client: string;
+  title: string;
+  status: Status;
+  dateCreated: string; // ISO
+  dueDate: string; // ISO
+  lastUpdated: string; // ISO
+};
+
+type EstimateLine = {
+  lineId: string;
+  lineNo: number;
+  section: string;
+  costCode: string;
+  description: string;
+  uom: string;
+  qty: number;
+  unitRate: number;
+  notes?: string;
+};
+
+type ItemCatalog = {
+  section: string;
+  costCode: string;
+  description: string;
+  uom: string;
+  defaultUnitRate: number;
+};
 
 const PAGE_SIZE = 20;
 const COST_CODE_REGEX = /^\d{2}-[A-Z]{3,10}-\d{3}-\d{3}$/;
-
 const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
+
+function uuid(): string {
+  return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
+}
 
 function formatDate(iso: string): string {
   if (!iso) return "";
@@ -40,14 +60,6 @@ function parseNumber(p: ValueParserParams): number {
   const cleaned = raw.replace(/[^0-9.\-]/g, "");
   const n = Number(cleaned);
   return isFinite(n) ? n : 0;
-}
-
-function uuid(): string {
-  return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
-}
-
-function nowIso(): string {
-  return new Date().toISOString();
 }
 
 function toIsoDateOnly(d: Date): string {
@@ -71,15 +83,106 @@ function parseDateOnlyToRangeEnd(yyyyMmDd: string): Date | null {
   return new Date(y, m - 1, d, 23, 59, 59, 999);
 }
 
+function StatusPill(props: { value: Status }) {
+  const v = props.value;
+  const colors =
+    v === "Draft"
+      ? { bg: "#e0f2fe", fg: "#075985" }
+      : v === "Submitted"
+      ? { bg: "#fef3c7", fg: "#92400e" }
+      : v === "Approved"
+      ? { bg: "#dcfce7", fg: "#166534" }
+      : { bg: "#e5e7eb", fg: "#111827" };
+
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        padding: "3px 8px",
+        borderRadius: 999,
+        fontWeight: 900,
+        fontSize: 12,
+        background: colors.bg,
+        color: colors.fg,
+        whiteSpace: "nowrap"
+      }}
+    >
+      {v}
+    </span>
+  );
+}
+
+/** Small but realistic catalog */
+const ITEM_CATALOG: ItemCatalog[] = [
+  { section: "Mobilization", costCode: "60-MOB-100-001", description: "Mobilization (LS)", uom: "LS", defaultUnitRate: 35000 },
+  { section: "Earthworks", costCode: "60-EARTH-210-010", description: "Excavation (m3)", uom: "m3", defaultUnitRate: 18.5 },
+  { section: "Earthworks", costCode: "60-EARTH-220-020", description: "Fill import & place (m3)", uom: "m3", defaultUnitRate: 24.0 },
+  { section: "Drainage", costCode: "60-DRAIN-310-005", description: "Culvert supply & install (m)", uom: "m", defaultUnitRate: 420.0 },
+  { section: "Paving", costCode: "60-PAVE-410-030", description: "Asphalt paving (t)", uom: "t", defaultUnitRate: 155.0 },
+  { section: "Structures", costCode: "60-STR-510-001", description: "Concrete placement (m3)", uom: "m3", defaultUnitRate: 420.0 },
+  { section: "Traffic", costCode: "60-TRAF-610-010", description: "Traffic control (day)", uom: "day", defaultUnitRate: 3200.0 },
+  { section: "General", costCode: "60-GEN-900-001", description: "Project management (day)", uom: "day", defaultUnitRate: 1800.0 }
+];
+
+function seedHeaders(): EstimateHeader[] {
+  const today = new Date();
+  const mk = (id: number, client: string, title: string, status: Status, daysAgo: number, dueIn: number) => {
+    const created = new Date(today);
+    created.setDate(created.getDate() - daysAgo);
+    const due = new Date(created);
+    due.setDate(due.getDate() + dueIn);
+    return {
+      estimateId: String(id),
+      client,
+      title,
+      status,
+      dateCreated: created.toISOString(),
+      dueDate: due.toISOString(),
+      lastUpdated: created.toISOString()
+    };
+  };
+
+  return [
+    mk(1574, "Custom Solutions Inc.", "Bridge deck rehab — Phase 1", "Approved", 18, 20),
+    mk(1563, "Camtom Syites", "Road widening — Segment B", "Submitted", 55, 30),
+    mk(1544, "Perichen Gretet", "Drainage improvements", "Draft", 7, 21),
+    mk(1523, "Gatom Sjites", "Estimate Retire", "Completed", 110, 10),
+    mk(1010, "Coculse Serviets", "Corridor pricing", "Completed", 250, 14)
+  ];
+}
+
+function seedLinesForEstimate(estimateId: string): EstimateLine[] {
+  // Give some estimates a larger dataset to mimic reality
+  const big = estimateId === "1574" || estimateId === "1523";
+  const count = big ? 180 : 35;
+
+  const rows: EstimateLine[] = [];
+  for (let i = 0; i < count; i++) {
+    const it = ITEM_CATALOG[i % ITEM_CATALOG.length];
+    rows.push({
+      lineId: uuid(),
+      lineNo: i + 1,
+      section: it.section,
+      costCode: it.costCode,
+      description: it.description,
+      uom: it.uom,
+      qty: big ? (i % 7) + 1 : (i % 4) + 1,
+      unitRate: it.defaultUnitRate,
+      notes: ""
+    });
+  }
+  return rows;
+}
+
 export default function App() {
-  // --- viewport responsive flags ---
+  // viewport flags
   const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
   useEffect(() => {
     const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
-
   const isPhone = vp.w <= 480;
   const isTablet = vp.w > 480 && vp.w <= 900;
   const isNarrow = vp.w <= 1024;
@@ -88,28 +191,26 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
   useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
 
-  // --- loading state ---
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+  // data (in-memory)
+  const [headers, setHeaders] = useState<EstimateHeader[]>(() => seedHeaders());
+  const [linesByEstimate, setLinesByEstimate] = useState<Map<string, EstimateLine[]>>(() => {
+    const m = new Map<string, EstimateLine[]>();
+    for (const h of seedHeaders()) m.set(h.estimateId, seedLinesForEstimate(h.estimateId));
+    return m;
+  });
 
-  // --- data ---
-  const [headers, setHeaders] = useState<EstimateHeader[]>([]);
-  const [items, setItems] = useState<ItemCatalog[]>([]);
-  const itemByCode = useMemo(() => new Map(items.map((i) => [i.costCode, i])), [items]);
-  const itemCodes = useMemo(() => items.map((i) => i.costCode), [items]);
-
-  // --- selection ---
-  const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(null);
+  // selection + view
+  const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(() => seedHeaders()[0]?.estimateId ?? null);
   const selectedHeader = useMemo(
     () => headers.find((h) => h.estimateId === selectedEstimateId) ?? null,
     [headers, selectedEstimateId]
   );
 
-  const [lines, setLines] = useState<EstimateLine[]>([]);
+  const [view, setView] = useState<"EstimatesList" | "EstimateDetail">("EstimatesList");
   const listApiRef = useRef<GridApi | null>(null);
   const detailApiRef = useRef<GridApi | null>(null);
 
-  // --- list filters ---
+  // list filters
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"All" | Status>("All");
   const [fromDate, setFromDate] = useState(() => {
@@ -119,71 +220,19 @@ export default function App() {
   });
   const [toDate, setToDate] = useState(() => toIsoDateOnly(new Date()));
 
-  // --- detail add-item selector ---
-  const [selectedItemCode, setSelectedItemCode] = useState<string>("");
+  // detail add selector
+  const [selectedItemCode, setSelectedItemCode] = useState<string>(() => ITEM_CATALOG[0].costCode);
+  const itemByCode = useMemo(() => new Map(ITEM_CATALOG.map((i) => [i.costCode, i])), []);
+  const itemCodes = useMemo(() => ITEM_CATALOG.map((i) => i.costCode), []);
 
-  // --- view ---
-  const [view, setView] = useState<"EstimatesList" | "EstimateDetail">("EstimatesList");
-
-  // Load headers + item catalog on startup (runtime fetch, not bundled)
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      setLoading(true);
-      setLoadError(null);
-
-      try {
-        const [h, it] = await Promise.all([
-          estimateDataService.getEstimateHeaders(),
-          estimateDataService.getItemCatalog()
-        ]);
-
-        if (cancelled) return;
-
-        setHeaders(h);
-        setItems(it);
-
-        const firstId = h[0]?.estimateId ?? null;
-        setSelectedEstimateId(firstId);
-
-        if (it.length > 0) setSelectedItemCode(it[0].costCode);
-
-        setLoading(false);
-      } catch (e: any) {
-        if (cancelled) return;
-        setLoadError(e?.message || "Failed to load sample data.");
-        setLoading(false);
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const filteredHeaders = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    const from = parseDateOnlyToRangeStart(fromDate);
-    const to = parseDateOnlyToRangeEnd(toDate);
-
-    return headers.filter((h) => {
-      if (statusFilter !== "All" && h.status !== statusFilter) return false;
-
-      const created = new Date(h.dateCreated);
-      if (from && created < from) return false;
-      if (to && created > to) return false;
-
-      if (!q) return true;
-      const hay = `${h.estimateId} ${h.client} ${h.title} ${h.status}`.toLowerCase();
-      return hay.includes(q);
-    });
-  }, [headers, search, statusFilter, fromDate, toDate]);
+  const currentLines = useMemo(() => {
+    if (!selectedEstimateId) return [];
+    return linesByEstimate.get(selectedEstimateId) ?? [];
+  }, [linesByEstimate, selectedEstimateId]);
 
   const estimateTotal = useMemo(() => {
-    return lines.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0), 0);
-  }, [lines]);
+    return currentLines.reduce((sum, r) => sum + (Number(r.qty) || 0) * (Number(r.unitRate) || 0), 0);
+  }, [currentLines]);
 
   const pinnedBottomRow = useMemo(() => {
     const pinned: EstimateLine = {
@@ -200,23 +249,14 @@ export default function App() {
     return [pinned];
   }, []);
 
-  function nextLineNo(): number {
-    const max = lines.reduce((m, r) => Math.max(m, r.lineNo || 0), 0);
-    return max + 1;
-  }
-
-  async function openEstimate(id: string) {
+  function openEstimate(id: string) {
     setSelectedEstimateId(id);
     setView("EstimateDetail");
     if (isDrawer) setSidebarOpen(false);
+  }
 
-    try {
-      const loaded = await estimateDataService.getEstimateLines(id);
-      setLines(loaded);
-    } catch (e: any) {
-      alert(e?.message || "Failed to load estimate lines.");
-      setLines([]);
-    }
+  function nextLineNo(): number {
+    return currentLines.reduce((m, r) => Math.max(m, r.lineNo || 0), 0) + 1;
   }
 
   function addItemLine() {
@@ -242,7 +282,12 @@ export default function App() {
       notes: ""
     };
 
-    setLines((prev) => [...prev, newRow]);
+    setLinesByEstimate((prev) => {
+      const m = new Map(prev);
+      const existing = m.get(selectedEstimateId) ?? [];
+      m.set(selectedEstimateId, [...existing, newRow]);
+      return m;
+    });
 
     setTimeout(() => {
       detailApiRef.current?.applyTransaction({ add: [newRow] });
@@ -251,24 +296,29 @@ export default function App() {
   }
 
   function deleteSelectedLines() {
+    if (!selectedEstimateId) return;
     const api = detailApiRef.current;
     if (!api) return;
+
     const selected = api.getSelectedRows() as EstimateLine[];
     if (!selected.length) {
       alert("Select one or more rows first.");
       return;
     }
     const ids = new Set(selected.map((r) => r.lineId));
-    setLines((prev) => prev.filter((r) => !ids.has(r.lineId)));
+
+    setLinesByEstimate((prev) => {
+      const m = new Map(prev);
+      const existing = m.get(selectedEstimateId) ?? [];
+      m.set(selectedEstimateId, existing.filter((r) => !ids.has(r.lineId)));
+      return m;
+    });
   }
 
   function createEstimate() {
-    // Front-end only: create a new estimate in memory and open it.
-    const nextId = String(
-      Math.max(...headers.map((h) => Number(h.estimateId) || 0), 1000) + 1
-    );
+    const nextId = String(Math.max(...headers.map((h) => Number(h.estimateId) || 0), 1000) + 1);
 
-    const created = nowIso();
+    const created = new Date();
     const due = new Date();
     due.setDate(due.getDate() + 14);
 
@@ -277,15 +327,14 @@ export default function App() {
       client: "New Client (PoC)",
       title: "New Estimate",
       status: "Draft",
-      dateCreated: created,
+      dateCreated: created.toISOString(),
       dueDate: due.toISOString(),
-      lastUpdated: created
+      lastUpdated: created.toISOString()
     };
 
-    // Default 20 lines (page)
-    const defaultItem = items[0];
+    // Default 20 lines
     const initialLines: EstimateLine[] = Array.from({ length: 20 }).map((_, idx) => {
-      const it = items[(idx + 1) % items.length] || defaultItem;
+      const it = ITEM_CATALOG[(idx + 1) % ITEM_CATALOG.length];
       return {
         lineId: uuid(),
         lineNo: idx + 1,
@@ -300,12 +349,34 @@ export default function App() {
     });
 
     setHeaders((prev) => [newHeader, ...prev]);
-    setSelectedEstimateId(nextId);
-    setLines(initialLines);
-    setView("EstimateDetail");
+    setLinesByEstimate((prev) => {
+      const m = new Map(prev);
+      m.set(nextId, initialLines);
+      return m;
+    });
 
+    setSelectedEstimateId(nextId);
+    setView("EstimateDetail");
     if (isDrawer) setSidebarOpen(false);
   }
+
+  const filteredHeaders = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const from = parseDateOnlyToRangeStart(fromDate);
+    const to = parseDateOnlyToRangeEnd(toDate);
+
+    return headers.filter((h) => {
+      if (statusFilter !== "All" && h.status !== statusFilter) return false;
+
+      const created = new Date(h.dateCreated);
+      if (from && created < from) return false;
+      if (to && created > to) return false;
+
+      if (!q) return true;
+      const hay = `${h.estimateId} ${h.client} ${h.title} ${h.status}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [headers, search, statusFilter, fromDate, toDate]);
 
   const estimatesListCols = useMemo<ColDef<EstimateHeader>[]>(() => {
     return [
@@ -333,7 +404,7 @@ export default function App() {
     ];
   }, []);
 
-  const estimateDetailCols = useMemo<ColDef<EstimateLine>[]>(() => {
+  const detailCols = useMemo<ColDef<EstimateLine>[]>(() => {
     return [
       { field: "section", headerName: "Section", rowGroup: true, hide: true },
 
@@ -443,28 +514,6 @@ export default function App() {
     }
   `;
 
-  if (loading) {
-    return (
-      <div style={{ padding: 16, fontWeight: 900 }}>
-        <style>{styles}</style>
-        Loading sample data from <code>/public/sample-data</code>…
-      </div>
-    );
-  }
-
-  if (loadError) {
-    return (
-      <div style={{ padding: 16 }}>
-        <style>{styles}</style>
-        <div style={{ fontWeight: 900, marginBottom: 8 }}>Failed to load sample data</div>
-        <div style={{ color: "#b91c1c", fontWeight: 800 }}>{loadError}</div>
-        <div style={{ marginTop: 10, fontWeight: 800 }}>
-          Ensure you ran: <code>npm run gen:data</code>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <>
       <style>{styles}</style>
@@ -482,7 +531,7 @@ export default function App() {
             gap: 10
           }}
         >
-          <div>Portal PoC — Runtime JSON data</div>
+          <div>Portal PoC — In-memory data (JSON later)</div>
 
           {view === "EstimatesList" && (
             <button style={{ fontWeight: 900 }} onClick={createEstimate}>
@@ -519,7 +568,7 @@ export default function App() {
               </button>
 
               <div style={{ fontSize: 12, color: "#64748b", fontWeight: 800 }}>
-                Data loaded from <code>/sample-data/*.json</code>
+                Next step: swap to runtime JSON under <code>/public/sample-data</code>.
               </div>
             </div>
           ) : null}
@@ -606,13 +655,13 @@ export default function App() {
                 </div>
 
                 {/* Toolbar */}
-                <div style={{ display: "grid", gap: 8, gridTemplateColumns: isNarrow ? "1fr" : "1fr 380px auto auto" }}>
+                <div style={{ display: "grid", gap: 8, gridTemplateColumns: isNarrow ? "1fr" : "1fr 260px auto auto" }}>
                   <select
                     value={selectedItemCode}
                     onChange={(e) => setSelectedItemCode(e.target.value)}
                     style={{ padding: 10, fontWeight: 800 }}
                   >
-                    {items.map((it) => (
+                    {ITEM_CATALOG.map((it) => (
                       <option key={it.costCode} value={it.costCode}>
                         {it.costCode} — {it.description} ({it.uom})
                       </option>
@@ -632,8 +681,8 @@ export default function App() {
                 <div style={{ flex: 1, minHeight: 0 }}>
                   <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
                     <AgGridReact<EstimateLine>
-                      rowData={lines}
-                      columnDefs={estimateDetailCols}
+                      rowData={currentLines}
+                      columnDefs={detailCols}
                       getRowId={(p) => p.data.lineId}
                       defaultColDef={{ resizable: true, sortable: true, filter: true, editable: true }}
                       rowSelection="multiple"
