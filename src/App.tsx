@@ -1,11 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type {
-  ColDef,
-  GridApi,
-  RowClickedEvent,
-  ValueParserParams
-} from "ag-grid-community";
+import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
 
 import "./App.css";
 
@@ -15,7 +10,7 @@ import { estimateDataService } from "./services/estimateDataService";
 const PAGE_SIZE = 20;
 const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
-type TopTab = "Forms" | "Reports" | "Dashboards";
+type TopArea = "Forms" | "Reports" | "Dashboards";
 type FormsPage = "Estimates" | "Forecast";
 type View = "EstimatesList" | "EstimateDetail" | "Forecast";
 
@@ -107,7 +102,6 @@ function loadPins(): Set<PinKey> {
     return new Set();
   }
 }
-
 function savePins(pins: Set<PinKey>) {
   localStorage.setItem("pinnedLinks", JSON.stringify(Array.from(pins.values())));
 }
@@ -121,36 +115,19 @@ export default function App() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  const isPhone = vp.w <= 480;
-  const isTablet = vp.w > 480 && vp.w <= 900;
-  const isDrawer = isPhone || isTablet;
-
+  const isDrawer = vp.w <= 900;
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
   useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
 
-  // top nav
-  const [topTab, setTopTab] = useState<TopTab>("Forms");
+  // Nav state
+  const [area, setArea] = useState<TopArea>("Forms");
+  const [formsExpanded, setFormsExpanded] = useState(true);
   const [formsPage, setFormsPage] = useState<FormsPage>("Estimates");
   const [view, setView] = useState<View>("EstimatesList");
 
-  // Forms flyout
-  const [formsFlyoutOpen, setFormsFlyoutOpen] = useState(false);
-  const flyoutRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!formsFlyoutOpen) return;
-      const t = e.target as Node;
-      if (flyoutRef.current && !flyoutRef.current.contains(t)) setFormsFlyoutOpen(false);
-    }
-    document.addEventListener("mousedown", onDocClick);
-    return () => document.removeEventListener("mousedown", onDocClick);
-  }, [formsFlyoutOpen]);
-
-  // pinned shortcuts
+  // pins
   const [pins, setPins] = useState<Set<PinKey>>(() => loadPins());
   useEffect(() => savePins(pins), [pins]);
-
   function togglePin(key: PinKey) {
     setPins((prev) => {
       const next = new Set(prev);
@@ -160,26 +137,7 @@ export default function App() {
     });
   }
 
-  const pinnedForms = useMemo(() => {
-    const entries: { key: PinKey; label: string; action: () => void }[] = [];
-    if (pins.has("Forms:Estimates")) {
-      entries.push({
-        key: "Forms:Estimates",
-        label: "Estimates",
-        action: () => goFormsEstimates()
-      });
-    }
-    if (pins.has("Forms:Forecast")) {
-      entries.push({
-        key: "Forms:Forecast",
-        label: "Forecast",
-        action: () => goFormsForecast()
-      });
-    }
-    return entries;
-  }, [pins]);
-
-  // runtime data
+  // data
   const [headers, setHeaders] = useState<EstimateHeader[]>([]);
   const [items, setItems] = useState<ItemCatalog[]>([]);
   const [linesByEstimate, setLinesByEstimate] = useState<Map<string, EstimateLine[]>>(new Map());
@@ -204,7 +162,7 @@ export default function App() {
   });
   const [toDate, setToDate] = useState(() => toIsoDateOnly(new Date()));
 
-  // detail add selector
+  // item selector
   const [selectedItemCode, setSelectedItemCode] = useState<string>("");
 
   const itemByCode = useMemo(() => new Map(items.map((i) => [i.costCode, i])), [items]);
@@ -242,7 +200,6 @@ export default function App() {
   // initial load
   useEffect(() => {
     let cancelled = false;
-
     async function loadAll() {
       try {
         setError(null);
@@ -267,7 +224,6 @@ export default function App() {
         setLoadingItems(false);
       }
     }
-
     loadAll();
     return () => {
       cancelled = true;
@@ -293,7 +249,8 @@ export default function App() {
 
   async function openEstimate(id: string) {
     setSelectedEstimateId(id);
-    setTopTab("Forms");
+    setArea("Forms");
+    setFormsExpanded(true);
     setFormsPage("Estimates");
     setView("EstimateDetail");
     if (isDrawer) setSidebarOpen(false);
@@ -305,15 +262,9 @@ export default function App() {
   }
 
   function addItemLine() {
-    if (!selectedEstimateId) {
-      alert("Open an estimate first.");
-      return;
-    }
+    if (!selectedEstimateId) return;
     const item = itemByCode.get(selectedItemCode);
-    if (!item) {
-      alert("Select an item first.");
-      return;
-    }
+    if (!item) return;
 
     const newRow: EstimateLine = {
       lineId: uuid(),
@@ -346,10 +297,7 @@ export default function App() {
     if (!api) return;
 
     const selected = api.getSelectedRows() as EstimateLine[];
-    if (!selected.length) {
-      alert("Select one or more rows first.");
-      return;
-    }
+    if (!selected.length) return;
     const ids = new Set(selected.map((r) => r.lineId));
 
     setLinesByEstimate((prev) => {
@@ -401,7 +349,8 @@ export default function App() {
     });
 
     setSelectedEstimateId(nextId);
-    setTopTab("Forms");
+    setArea("Forms");
+    setFormsExpanded(true);
     setFormsPage("Estimates");
     setView("EstimateDetail");
     if (isDrawer) setSidebarOpen(false);
@@ -409,13 +358,7 @@ export default function App() {
 
   function updateEstimateStatus(id: string, newStatus: Status) {
     const now = new Date().toISOString();
-    setHeaders((prev) =>
-      prev.map((h) =>
-        h.estimateId === id
-          ? { ...h, status: newStatus, lastUpdated: now }
-          : h
-      )
-    );
+    setHeaders((prev) => prev.map((h) => (h.estimateId === id ? { ...h, status: newStatus, lastUpdated: now } : h)));
   }
 
   function submitEstimate() {
@@ -453,30 +396,15 @@ export default function App() {
       { field: "estimateId", headerName: "ID", width: 90 },
       { field: "client", headerName: "Client", flex: 1, minWidth: 220 },
       { field: "title", headerName: "Title", flex: 1, minWidth: 240 },
-      {
-        field: "dateCreated",
-        headerName: "Date Created",
-        width: 140,
-        valueFormatter: (p) => formatDate(String(p.value || ""))
-      },
+      { field: "dateCreated", headerName: "Date Created", width: 140, valueFormatter: (p) => formatDate(String(p.value || "")) },
       {
         field: "status",
         headerName: "Status",
         width: 150,
         cellRenderer: (p: any) => <StatusPill value={p.value as Status} />
       },
-      {
-        field: "dueDate",
-        headerName: "Due Date",
-        width: 120,
-        valueFormatter: (p) => formatDate(String(p.value || ""))
-      },
-      {
-        field: "lastUpdated",
-        headerName: "Updated",
-        width: 120,
-        valueFormatter: (p) => formatDate(String(p.value || ""))
-      }
+      { field: "dueDate", headerName: "Due Date", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) },
+      { field: "lastUpdated", headerName: "Updated", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) }
     ];
   }, []);
 
@@ -500,7 +428,6 @@ export default function App() {
         valueSetter: (p) => {
           const newCode = String(p.newValue ?? "").trim().toUpperCase();
           p.data.costCode = newCode;
-
           const found = itemByCode.get(newCode);
           if (found) {
             p.data.description = found.description;
@@ -512,45 +439,13 @@ export default function App() {
         }
       },
       { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 320 },
-      {
-        field: "uom",
-        headerName: "UOM",
-        width: 100,
-        editable: true,
-        cellEditor: "agSelectCellEditor",
-        cellEditorParams: { values: UOM_OPTIONS }
-      },
-      {
-        field: "qty",
-        headerName: "Qty",
-        width: 110,
-        editable: true,
-        valueParser: parseNumber,
-        valueSetter: (p) => {
-          const n = Number(p.newValue);
-          p.data.qty = isFinite(n) ? Math.max(0, n) : 0;
-          return true;
-        }
-      },
-      {
-        field: "unitRate",
-        headerName: "Unit Rate",
-        width: 150,
-        editable: true,
-        valueParser: parseNumber,
-        valueSetter: (p) => {
-          const n = Number(p.newValue);
-          p.data.unitRate = isFinite(n) ? Math.max(0, n) : 0;
-          return true;
-        }
-      },
+      { field: "uom", headerName: "UOM", width: 100, editable: true, cellEditor: "agSelectCellEditor", cellEditorParams: { values: UOM_OPTIONS } },
+      { field: "qty", headerName: "Qty", width: 110, editable: true, valueParser: parseNumber },
+      { field: "unitRate", headerName: "Unit Rate", width: 150, editable: true, valueParser: parseNumber },
       {
         headerName: "Line Total",
         width: 170,
-        valueGetter: (p) => {
-          if (p.node.rowPinned) return estimateTotal;
-          return (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0);
-        },
+        valueGetter: (p) => (p.node.rowPinned ? estimateTotal : (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0)),
         valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0),
         cellStyle: (p) => (p.node.rowPinned ? { fontWeight: "950" } : undefined)
       },
@@ -558,133 +453,38 @@ export default function App() {
     ];
   }, [estimateTotal, itemCodes, itemByCode]);
 
-  function goFormsEstimates() {
-    setTopTab("Forms");
+  function goEstimates() {
+    setArea("Forms");
+    setFormsExpanded(true);
     setFormsPage("Estimates");
     setView("EstimatesList");
-    setFormsFlyoutOpen(false);
     if (isDrawer) setSidebarOpen(false);
   }
 
-  function goFormsForecast() {
-    setTopTab("Forms");
+  function goForecast() {
+    setArea("Forms");
+    setFormsExpanded(true);
     setFormsPage("Forecast");
     setView("Forecast");
-    setFormsFlyoutOpen(false);
     if (isDrawer) setSidebarOpen(false);
   }
 
-  // layout column count
   const gridTemplateColumns = isDrawer ? "1fr" : "320px 1fr";
-
-  const headerTitle = useMemo(() => {
-    if (topTab === "Reports") return "Reports";
-    if (topTab === "Dashboards") return "Dashboards";
-    if (view === "EstimateDetail" && selectedHeader) return `Estimate ${selectedHeader.estimateId}`;
-    if (view === "Forecast") return "Forecast";
-    return "Estimates";
-  }, [topTab, view, selectedHeader]);
 
   return (
     <div className="appShell">
-      {/* Top bar */}
       <div className="topBar">
         <div className="brand">
           <div className="brandMark" />
           <div>Portal</div>
-
-          <div className="topTabs">
-            {/* Forms flyout */}
-            <div className="flyoutWrap" ref={flyoutRef}>
-              <button
-                className={`tabBtn ${topTab === "Forms" ? "tabBtnActive" : ""}`}
-                onClick={() => setFormsFlyoutOpen((v) => !v)}
-                title="Forms"
-              >
-                Forms ▾
-              </button>
-
-              {formsFlyoutOpen && (
-                <div className="flyout">
-                  <div className="flyoutHeader">Forms</div>
-
-                  <div
-                    className="flyoutItem"
-                    onClick={() => goFormsEstimates()}
-                    role="button"
-                  >
-                    <div>
-                      <div className="flyoutTitle">Estimates</div>
-                      <div className="flyoutSub">Create, edit, submit estimates</div>
-                    </div>
-                    <button
-                      className="pinBtn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePin("Forms:Estimates");
-                      }}
-                      title={pins.has("Forms:Estimates") ? "Unpin" : "Pin"}
-                    >
-                      {pins.has("Forms:Estimates") ? "★" : "☆"}
-                    </button>
-                  </div>
-
-                  <div
-                    className="flyoutItem"
-                    onClick={() => goFormsForecast()}
-                    role="button"
-                  >
-                    <div>
-                      <div className="flyoutTitle">Forecast</div>
-                      <div className="flyoutSub">Forward-looking forecast entry (PoC)</div>
-                    </div>
-                    <button
-                      className="pinBtn"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        togglePin("Forms:Forecast");
-                      }}
-                      title={pins.has("Forms:Forecast") ? "Unpin" : "Pin"}
-                    >
-                      {pins.has("Forms:Forecast") ? "★" : "☆"}
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            <button
-              className={`tabBtn ${topTab === "Reports" ? "tabBtnActive" : ""}`}
-              onClick={() => {
-                setTopTab("Reports");
-                setFormsFlyoutOpen(false);
-              }}
-            >
-              Reports
-            </button>
-
-            <button
-              className={`tabBtn ${topTab === "Dashboards" ? "tabBtnActive" : ""}`}
-              onClick={() => {
-                setTopTab("Dashboards");
-                setFormsFlyoutOpen(false);
-              }}
-            >
-              Dashboards
-            </button>
+          <div className="kicker" style={{ marginLeft: 10 }}>
+            {area === "Forms" ? (view === "Forecast" ? "Forecast" : view === "EstimateDetail" ? `Estimate ${selectedHeader?.estimateId ?? ""}` : "Estimates") : area}
           </div>
-
-          <div className="kicker">{headerTitle}</div>
         </div>
 
         <div className="topRight">
-          {topTab === "Forms" && view === "EstimatesList" && (
-            <button
-              className="primaryBtn"
-              onClick={createEstimate}
-              disabled={loadingHeaders || loadingItems}
-              title="Create a new estimate (PoC)"
-            >
+          {area === "Forms" && view === "EstimatesList" && (
+            <button className="primaryBtn" onClick={createEstimate} disabled={loadingHeaders || loadingItems}>
               Create Estimate
             </button>
           )}
@@ -700,87 +500,77 @@ export default function App() {
       {error && (
         <div className="panel" style={{ margin: 12, borderColor: "rgba(239,68,68,0.35)", background: "rgba(239,68,68,0.08)" }}>
           <div style={{ fontWeight: 950 }}>Error</div>
-          <div style={{ color: "rgba(255,255,255,0.80)", fontWeight: 850, marginTop: 6 }}>
-            {error}
-          </div>
+          <div style={{ color: "rgba(255,255,255,0.80)", fontWeight: 850, marginTop: 6 }}>{error}</div>
           <div className="kicker" style={{ marginTop: 8 }}>
             Quick check: open <code>/sample-data/estimates.json</code> directly in the browser.
           </div>
         </div>
       )}
 
-      {/* Body */}
       <div className="bodyGrid" style={{ gridTemplateColumns }}>
-        {/* Sidebar */}
         {(!isDrawer || sidebarOpen) && (
           <div className="sidebar">
             <div className="sectionTitle">Navigation</div>
 
+            {/* Forms (expand/collapse) */}
             <button
-              className={`navBtn ${topTab === "Forms" ? "navBtnActive" : ""}`}
-              onClick={() => setTopTab("Forms")}
+              className={`navBtn ${area === "Forms" ? "navBtnActive" : ""}`}
+              onClick={() => {
+                setArea("Forms");
+                setFormsExpanded((v) => !v);
+              }}
             >
-              Forms
+              Forms {formsExpanded ? "▾" : "▸"}
             </button>
-            <button
-              className={`navBtn ${topTab === "Reports" ? "navBtnActive" : ""}`}
-              onClick={() => setTopTab("Reports")}
-              style={{ marginTop: 8 }}
-            >
+
+            {area === "Forms" && formsExpanded && (
+              <div className="navIndented" style={{ marginTop: 8 }}>
+                <div className="navRow">
+                  <button className={`navBtn ${formsPage === "Estimates" && view !== "Forecast" ? "navBtnActive" : ""}`} onClick={goEstimates}>
+                    Estimates
+                  </button>
+                  <button className="pinBtn" onClick={() => togglePin("Forms:Estimates")} title={pins.has("Forms:Estimates") ? "Unpin" : "Pin"}>
+                    {pins.has("Forms:Estimates") ? "★" : "☆"}
+                  </button>
+                </div>
+
+                <div className="navRow">
+                  <button className={`navBtn ${formsPage === "Forecast" ? "navBtnActive" : ""}`} onClick={goForecast}>
+                    Forecast
+                  </button>
+                  <button className="pinBtn" onClick={() => togglePin("Forms:Forecast")} title={pins.has("Forms:Forecast") ? "Unpin" : "Pin"}>
+                    {pins.has("Forms:Forecast") ? "★" : "☆"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Reports */}
+            <button className={`navBtn ${area === "Reports" ? "navBtnActive" : ""}`} style={{ marginTop: 10 }} onClick={() => setArea("Reports")}>
               Reports
             </button>
-            <button
-              className={`navBtn ${topTab === "Dashboards" ? "navBtnActive" : ""}`}
-              onClick={() => setTopTab("Dashboards")}
-              style={{ marginTop: 8 }}
-            >
+
+            {/* Dashboards */}
+            <button className={`navBtn ${area === "Dashboards" ? "navBtnActive" : ""}`} style={{ marginTop: 10 }} onClick={() => setArea("Dashboards")}>
               Dashboards
             </button>
 
-            {/* Pinned under Forms (indented) */}
-            {topTab === "Forms" && (
-              <>
-                <div className="sectionTitle" style={{ marginTop: 16 }}>
-                  Forms (Pinned)
-                </div>
+            {/* Pinned shortcuts (always visible, typical pattern) */}
+            <div className="sectionTitle" style={{ marginTop: 18 }}>Pinned</div>
+            <div className="navIndented">
+              {pins.size === 0 && <div className="kicker">Pin Estimates/Forecast to keep them here.</div>}
 
-                {pinnedForms.length === 0 ? (
-                  <div className="kicker">
-                    Nothing pinned yet. Use the Forms flyout in the top bar to pin Estimates or Forecast.
-                  </div>
-                ) : (
-                  <div className="navIndented" style={{ display: "grid", gap: 8, marginTop: 8 }}>
-                    {pins.has("Forms:Estimates") && (
-                      <div className="navRow">
-                        <button
-                          className={`navBtn ${formsPage === "Estimates" && view !== "Forecast" ? "navBtnActive" : ""}`}
-                          onClick={goFormsEstimates}
-                        >
-                          Estimates
-                        </button>
-                        <button className="pinBtn" title="Unpin" onClick={() => togglePin("Forms:Estimates")}>
-                          ★
-                        </button>
-                      </div>
-                    )}
-
-                    {pins.has("Forms:Forecast") && (
-                      <div className="navRow">
-                        <button
-                          className={`navBtn ${formsPage === "Forecast" ? "navBtnActive" : ""}`}
-                          onClick={goFormsForecast}
-                        >
-                          Forecast
-                        </button>
-                        <button className="pinBtn" title="Unpin" onClick={() => togglePin("Forms:Forecast")}>
-                          ★
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </>
-            )}
+              {pins.has("Forms:Estimates") && (
+                <button className="navBtn" onClick={goEstimates}>
+                  Estimates
+                </button>
+              )}
+              {pins.has("Forms:Forecast") && (
+                <button className="navBtn" onClick={goForecast}>
+                  Forecast
+                </button>
+              )}
+            </div>
 
             <div className="kicker" style={{ marginTop: 16 }}>
               Data: <code>/public/sample-data</code>
@@ -788,72 +578,42 @@ export default function App() {
           </div>
         )}
 
-        {/* Main */}
         <div className="main">
-          {/* Loading */}
-          {(loadingHeaders || loadingItems) && topTab === "Forms" && (
+          {(loadingHeaders || loadingItems) && area === "Forms" && (
             <div className="panel" style={{ fontWeight: 950 }}>
               Loading runtime JSON…
             </div>
           )}
 
-          {/* Reports / Dashboards placeholders */}
-          {topTab === "Reports" && (
+          {area === "Reports" && (
             <div className="panel">
               <div style={{ fontWeight: 950, fontSize: 16 }}>Reports</div>
-              <div className="kicker" style={{ marginTop: 6 }}>
-                Placeholder. Next we can add saved report definitions + export formats.
-              </div>
+              <div className="kicker" style={{ marginTop: 6 }}>Placeholder.</div>
             </div>
           )}
 
-          {topTab === "Dashboards" && (
+          {area === "Dashboards" && (
             <div className="panel">
               <div style={{ fontWeight: 950, fontSize: 16 }}>Dashboards</div>
-              <div className="kicker" style={{ marginTop: 6 }}>
-                Placeholder. Next we can add summary cards + charts.
-              </div>
+              <div className="kicker" style={{ marginTop: 6 }}>Placeholder.</div>
             </div>
           )}
 
-          {/* Forecast placeholder */}
-          {topTab === "Forms" && view === "Forecast" && (
+          {area === "Forms" && view === "Forecast" && (
             <div className="panel">
               <div style={{ fontWeight: 950, fontSize: 16 }}>Forecast</div>
-              <div className="kicker" style={{ marginTop: 6 }}>
-                Placeholder. Next: forecast grid by period / cost code.
-              </div>
+              <div className="kicker" style={{ marginTop: 6 }}>Placeholder.</div>
             </div>
           )}
 
-          {/* Estimates list */}
-          {topTab === "Forms" && view === "EstimatesList" && !loadingHeaders && (
+          {area === "Forms" && view === "EstimatesList" && !loadingHeaders && (
             <div className="panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 12 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
-                <div>
-                  <div style={{ fontWeight: 950, fontSize: 18 }}>Estimates</div>
-                  <div className="kicker">Search, filter, and open estimates.</div>
-                </div>
-
-                {/* pinned quick access (optional) */}
-                {pinnedForms.length > 0 && (
-                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                    <div className="kicker">Pinned:</div>
-                    {pinnedForms.map((p) => (
-                      <button key={p.key} className="ghostBtn" onClick={p.action}>
-                        {p.label}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div>
+                <div style={{ fontWeight: 950, fontSize: 18 }}>Estimates</div>
+                <div className="kicker">Search, filter, and open estimates.</div>
               </div>
 
-              <div
-                className="toolbarGrid"
-                style={{
-                  gridTemplateColumns: vp.w <= 1024 ? "1fr" : "1fr 180px 170px 170px"
-                }}
-              >
+              <div className="toolbarGrid" style={{ gridTemplateColumns: vp.w <= 1024 ? "1fr" : "1fr 180px 170px 170px" }}>
                 <input className="input" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search…" />
 
                 <select className="input" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)}>
@@ -872,7 +632,18 @@ export default function App() {
                 <div className="agHost ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
                   <AgGridReact<EstimateHeader>
                     rowData={filteredHeaders}
-                    columnDefs={estimatesListCols}
+                    columnDefs={detailApiRef.current ? [] : undefined}
+                    columnDefs={(() => {
+                      return [
+                        { field: "estimateId", headerName: "ID", width: 90 },
+                        { field: "client", headerName: "Client", flex: 1, minWidth: 220 },
+                        { field: "title", headerName: "Title", flex: 1, minWidth: 240 },
+                        { field: "dateCreated", headerName: "Date Created", width: 140, valueFormatter: (p) => formatDate(String(p.value || "")) },
+                        { field: "status", headerName: "Status", width: 150, cellRenderer: (p: any) => <StatusPill value={p.value as Status} /> },
+                        { field: "dueDate", headerName: "Due Date", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) },
+                        { field: "lastUpdated", headerName: "Updated", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) }
+                      ] as ColDef<EstimateHeader>[];
+                    })()}
                     defaultColDef={{ resizable: true, sortable: true, filter: true }}
                     rowSelection="single"
                     onGridReady={(e) => {
@@ -890,8 +661,7 @@ export default function App() {
             </div>
           )}
 
-          {/* Estimate detail */}
-          {topTab === "Forms" && view === "EstimateDetail" && selectedHeader && (
+          {area === "Forms" && view === "EstimateDetail" && selectedHeader && (
             <div className="panel" style={{ flex: 1, minHeight: 0, display: "flex", flexDirection: "column", gap: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
                 <div>
@@ -920,12 +690,7 @@ export default function App() {
 
               {loadingLines && <div className="kicker" style={{ fontWeight: 950 }}>Loading estimate lines…</div>}
 
-              <div
-                className="toolbarGrid"
-                style={{
-                  gridTemplateColumns: vp.w <= 1024 ? "1fr" : "1fr 160px 170px"
-                }}
-              >
+              <div className="toolbarGrid" style={{ gridTemplateColumns: vp.w <= 1024 ? "1fr" : "1fr 160px 170px" }}>
                 <select className="input" value={selectedItemCode} onChange={(e) => setSelectedItemCode(e.target.value)}>
                   {items.map((it) => (
                     <option key={it.costCode} value={it.costCode}>

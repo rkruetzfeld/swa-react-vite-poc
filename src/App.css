@@ -1,42 +1,181 @@
-#root {
-  max-width: 1280px;
-  margin: 0 auto;
-  padding: 2rem;
-  text-align: center;
+.appShell {
+  height: 100%;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
 }
 
-.logo {
-  height: 6em;
-  padding: 1.5em;
-  will-change: filter;
-  transition: filter 300ms;
-}
-.logo:hover {
-  filter: drop-shadow(0 0 2em #646cffaa);
-}
-.logo.react:hover {
-  filter: drop-shadow(0 0 2em #61dafbaa);
-}
-
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+/* Top bar */
+.topBar {
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(10px);
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  a:nth-of-type(2) .logo {
-    animation: logo-spin infinite 20s linear;
-  }
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
 }
 
-.card {
-  padding: 2em;
+.brandMark {
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(180deg, var(--accent2), var(--accent));
+  box-shadow: 0 0 0 1px rgba(255,255,255,0.15) inset;
 }
 
-.read-the-docs {
-  color: #888;
+.topRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.primaryBtn {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(59,130,246,0.45);
+  background: linear-gradient(180deg, rgba(59,130,246,0.35), rgba(59,130,246,0.18));
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+}
+.primaryBtn:hover {
+  background: linear-gradient(180deg, rgba(59,130,246,0.45), rgba(59,130,246,0.22));
+}
+
+.ghostBtn {
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+}
+.ghostBtn:hover { background: rgba(255,255,255,0.08); }
+
+.kicker {
+  color: var(--muted);
+  font-weight: 850;
+  font-size: 12px;
+}
+
+/* Body split */
+.bodyGrid {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+}
+
+/* Sidebar */
+.sidebar {
+  min-height: 0;
+  overflow: auto;
+  border-right: 1px solid var(--border);
+  padding: 12px;
+}
+
+.sectionTitle {
+  color: var(--muted);
+  font-weight: 900;
+  font-size: 12px;
+  margin: 10px 0 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+}
+
+.navBtn {
+  width: 100%;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-weight: 900;
+  cursor: pointer;
+  text-align: left;
+}
+.navBtn:hover { background: rgba(255,255,255,0.07); }
+.navBtnActive { border-color: rgba(59,130,246,0.45); background: rgba(59,130,246,0.12); }
+
+.navRow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.pinBtn {
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  cursor: pointer;
+  font-weight: 900;
+  color: var(--text);
+}
+.pinBtn:hover { background: rgba(255,255,255,0.08); }
+
+.navIndented {
+  margin-left: 10px;
+  border-left: 1px solid rgba(255,255,255,0.12);
+  padding-left: 10px;
+  display: grid;
+  gap: 8px;
+}
+
+/* Main */
+.main {
+  min-height: 0;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel {
+  border: 1px solid var(--border);
+  background: var(--panel);
+  border-radius: 16px;
+  padding: 12px;
+}
+
+.toolbarGrid {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.input {
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: var(--text);
+  font-weight: 850;
+  outline: none;
+}
+.input:focus { border-color: rgba(59,130,246,0.55); }
+
+.agHost {
+  height: 100%;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,0.10);
+}
+
+/* Mobile drawer behavior */
+@media (max-width: 900px) {
+  .topBar { padding: 0 10px; }
 }
