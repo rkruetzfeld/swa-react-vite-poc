@@ -2,6 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
+import "./components/StatusPill.css";
 
 import "./App.css";
 
