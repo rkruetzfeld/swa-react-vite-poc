@@ -2,26 +2,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
-import "./components/StatusPill.css";
 
+import "./components/StatusPill.css";
 import "./App.css";
 
 import type { EstimateHeader, EstimateLine, ItemCatalog, Status } from "./models/estimateModels";
 import { estimateDataService } from "./services/estimateDataService";
 
-// ✅ Mock pages (static screens)
+// ✅ Pages
 import ForecastPage from "./pages/ForecastPage";
 import DashboardPage from "./pages/DashboardPage";
 import ReportsPage from "./pages/ReportsPage";
 import ApiEstimatesPage from "./pages/ApiEstimatesPage";
 
-// ✅ Shared component (replaces inline pill)
+// ✅ Shared component
 import StatusPill, { type StatusTone } from "./components/StatusPill";
 
 const PAGE_SIZE = 20;
 const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
-// Existing shell navigation types
+// Shell navigation types
 type TopArea = "Forms" | "Reports" | "Dashboards";
 type FormsPage = "Estimates" | "Forecast" | "API";
 type View = "EstimatesList" | "EstimateDetail" | "Forecast" | "ApiEstimates";
@@ -73,7 +73,7 @@ function parseDateOnlyToRangeEnd(yyyyMmDd: string): Date | null {
   return new Date(y, m - 1, d, 23, 59, 59, 999);
 }
 
-// ✅ Central mapping: Status -> tone
+// Status -> tone mapping
 function statusToTone(v: Status): StatusTone {
   switch (v) {
     case "Draft":
@@ -99,6 +99,7 @@ function loadPins(): Set<PinKey> {
     return new Set();
   }
 }
+
 function savePins(pins: Set<PinKey>) {
   localStorage.setItem("pinnedLinks", JSON.stringify(Array.from(pins.values())));
 }
@@ -188,7 +189,7 @@ export default function App() {
     return [pinned];
   }, []);
 
-  // ✅ Navigation helpers (must live inside App)
+  // ✅ Navigation helpers (inside App)
   function goEstimates() {
     setArea("Forms");
     setFormsExpanded(true);
@@ -463,8 +464,7 @@ export default function App() {
       {
         headerName: "Line Total",
         width: 170,
-        valueGetter: (p) =>
-          p.node?.rowPinned ? estimateTotal : (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0),
+        valueGetter: (p) => (p.node?.rowPinned ? estimateTotal : (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0)),
         valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0),
         cellStyle: (p) => (p.node?.rowPinned ? { fontWeight: "950" } : undefined),
       },
@@ -536,7 +536,12 @@ export default function App() {
             {area === "Forms" && formsExpanded && (
               <div className="navIndented" style={{ marginTop: 8 }}>
                 <div className="navRow">
-                  <button className={`navBtn ${formsPage === "Estimates" && view !== "Forecast" && view !== "ApiEstimates" ? "navBtnActive" : ""}`} onClick={goEstimates}>
+                  <button
+                    className={`navBtn ${
+                      formsPage === "Estimates" && (view === "EstimatesList" || view === "EstimateDetail") ? "navBtnActive" : ""
+                    }`}
+                    onClick={goEstimates}
+                  >
                     Estimates
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Estimates")} title={pins.has("Forms:Estimates") ? "Unpin" : "Pin"}>
@@ -545,7 +550,7 @@ export default function App() {
                 </div>
 
                 <div className="navRow">
-                  <button className={`navBtn ${formsPage === "Forecast" ? "navBtnActive" : ""}`} onClick={goForecast}>
+                  <button className={`navBtn ${formsPage === "Forecast" && view === "Forecast" ? "navBtnActive" : ""}`} onClick={goForecast}>
                     Forecast
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Forecast")} title={pins.has("Forms:Forecast") ? "Unpin" : "Pin"}>
@@ -554,7 +559,7 @@ export default function App() {
                 </div>
 
                 <div className="navRow">
-                  <button className={`navBtn ${formsPage === "API" ? "navBtnActive" : ""}`} onClick={goApi}>
+                  <button className={`navBtn ${formsPage === "API" && view === "ApiEstimates" ? "navBtnActive" : ""}`} onClick={goApi}>
                     API Test
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:API")} title={pins.has("Forms:API") ? "Unpin" : "Pin"}>
