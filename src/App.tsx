@@ -13,6 +13,7 @@ import { estimateDataService } from "./services/estimateDataService";
 import ForecastPage from "./pages/ForecastPage";
 import DashboardPage from "./pages/DashboardPage";
 import ReportsPage from "./pages/ReportsPage";
+import ApiEstimatesPage from "./pages/ApiEstimatesPage";
 
 // ✅ Shared component (replaces inline pill)
 import StatusPill, { type StatusTone } from "./components/StatusPill";
@@ -22,8 +23,8 @@ const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
 // Existing shell navigation types
 type TopArea = "Forms" | "Reports" | "Dashboards";
-type FormsPage = "Estimates" | "Forecast";
-type View = "EstimatesList" | "EstimateDetail" | "Forecast";
+type FormsPage = "Estimates" | "Forecast" | "API";
+type View = "EstimatesList" | "EstimateDetail" | "Forecast" | "ApiEstimates";
 
 type PinKey = `Forms:${FormsPage}`;
 
@@ -186,6 +187,31 @@ export default function App() {
     };
     return [pinned];
   }, []);
+
+  // ✅ Navigation helpers (must live inside App)
+  function goEstimates() {
+    setArea("Forms");
+    setFormsExpanded(true);
+    setFormsPage("Estimates");
+    setView("EstimatesList");
+    if (isDrawer) setSidebarOpen(false);
+  }
+
+  function goForecast() {
+    setArea("Forms");
+    setFormsExpanded(true);
+    setFormsPage("Forecast");
+    setView("Forecast");
+    if (isDrawer) setSidebarOpen(false);
+  }
+
+  function goApi() {
+    setArea("Forms");
+    setFormsExpanded(true);
+    setFormsPage("API");
+    setView("ApiEstimates");
+    if (isDrawer) setSidebarOpen(false);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -390,7 +416,6 @@ export default function App() {
         field: "status",
         headerName: "Status",
         width: 150,
-        // ✅ use shared component (grid variant)
         cellRenderer: (p: any) => {
           const s = p.value as Status;
           return <StatusPill label={s} tone={statusToTone(s)} variant="grid" />;
@@ -435,36 +460,17 @@ export default function App() {
       { field: "uom", headerName: "UOM", width: 100, editable: true, cellEditor: "agSelectCellEditor", cellEditorParams: { values: UOM_OPTIONS } },
       { field: "qty", headerName: "Qty", width: 110, editable: true, valueParser: parseNumber },
       { field: "unitRate", headerName: "Unit Rate", width: 150, editable: true, valueParser: parseNumber },
-     {
-  headerName: "Line Total",
-  width: 170,
-  valueGetter: (p) =>
-    p.node?.rowPinned
-      ? estimateTotal
-      : (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0),
-  valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0),
-  cellStyle: (p) => (p.node?.rowPinned ? { fontWeight: "950" } : undefined),
-}
-,
+      {
+        headerName: "Line Total",
+        width: 170,
+        valueGetter: (p) =>
+          p.node?.rowPinned ? estimateTotal : (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0),
+        valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0),
+        cellStyle: (p) => (p.node?.rowPinned ? { fontWeight: "950" } : undefined),
+      },
       { field: "notes", headerName: "Notes", editable: true, width: 240 },
     ];
   }, [estimateTotal, itemCodes, itemByCode]);
-
-  function goEstimates() {
-    setArea("Forms");
-    setFormsExpanded(true);
-    setFormsPage("Estimates");
-    setView("EstimatesList");
-    if (isDrawer) setSidebarOpen(false);
-  }
-
-  function goForecast() {
-    setArea("Forms");
-    setFormsExpanded(true);
-    setFormsPage("Forecast");
-    setView("Forecast");
-    if (isDrawer) setSidebarOpen(false);
-  }
 
   const gridTemplateColumns = isDrawer ? "1fr" : "320px 1fr";
 
@@ -478,6 +484,8 @@ export default function App() {
             {area === "Forms"
               ? view === "Forecast"
                 ? "Forecast"
+                : view === "ApiEstimates"
+                ? "API Test"
                 : view === "EstimateDetail"
                 ? `Estimate ${selectedHeader?.estimateId ?? ""}`
                 : "Estimates"
@@ -528,7 +536,7 @@ export default function App() {
             {area === "Forms" && formsExpanded && (
               <div className="navIndented" style={{ marginTop: 8 }}>
                 <div className="navRow">
-                  <button className={`navBtn ${formsPage === "Estimates" && view !== "Forecast" ? "navBtnActive" : ""}`} onClick={goEstimates}>
+                  <button className={`navBtn ${formsPage === "Estimates" && view !== "Forecast" && view !== "ApiEstimates" ? "navBtnActive" : ""}`} onClick={goEstimates}>
                     Estimates
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Estimates")} title={pins.has("Forms:Estimates") ? "Unpin" : "Pin"}>
@@ -542,6 +550,15 @@ export default function App() {
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Forecast")} title={pins.has("Forms:Forecast") ? "Unpin" : "Pin"}>
                     {pins.has("Forms:Forecast") ? "★" : "☆"}
+                  </button>
+                </div>
+
+                <div className="navRow">
+                  <button className={`navBtn ${formsPage === "API" ? "navBtnActive" : ""}`} onClick={goApi}>
+                    API Test
+                  </button>
+                  <button className="pinBtn" onClick={() => togglePin("Forms:API")} title={pins.has("Forms:API") ? "Unpin" : "Pin"}>
+                    {pins.has("Forms:API") ? "★" : "☆"}
                   </button>
                 </div>
               </div>
@@ -559,7 +576,7 @@ export default function App() {
               Pinned
             </div>
             <div className="navIndented">
-              {pins.size === 0 && <div className="kicker">Pin Estimates/Forecast to keep them here.</div>}
+              {pins.size === 0 && <div className="kicker">Pin Estimates/Forecast/API to keep them here.</div>}
 
               {pins.has("Forms:Estimates") && (
                 <button className="navBtn" onClick={goEstimates}>
@@ -569,6 +586,11 @@ export default function App() {
               {pins.has("Forms:Forecast") && (
                 <button className="navBtn" onClick={goForecast}>
                   Forecast
+                </button>
+              )}
+              {pins.has("Forms:API") && (
+                <button className="navBtn" onClick={goApi}>
+                  API Test
                 </button>
               )}
             </div>
@@ -601,6 +623,12 @@ export default function App() {
           {area === "Forms" && view === "Forecast" && (
             <div className="panel" style={{ flex: 1, minHeight: 0 }}>
               <ForecastPage />
+            </div>
+          )}
+
+          {area === "Forms" && view === "ApiEstimates" && (
+            <div className="panel" style={{ flex: 1, minHeight: 0 }}>
+              <ApiEstimatesPage />
             </div>
           )}
 
@@ -655,7 +683,6 @@ export default function App() {
                   <div style={{ fontWeight: 950, fontSize: 18, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
                     <span>Estimate {selectedHeader.estimateId}</span>
 
-                    {/* ✅ shared pill (default variant) */}
                     <StatusPill label={selectedHeader.status} tone={statusToTone(selectedHeader.status)} />
 
                     <span className="kicker">{selectedHeader.client}</span>
