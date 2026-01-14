@@ -41,13 +41,14 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
 
-          # App: already built by Vite
-          app_location: "/"
-          app_artifact_location: "dist"
+          # App (React/Vite) - repo root is source
+          app_location: "."
+          output_location: "dist"
           skip_app_build: true
 
-          # API: Azure Functions (dotnet-isolated)
+          # API (Azure Functions)
           api_location: "api/Portal.RefCache.Api"
+
 
 
 
