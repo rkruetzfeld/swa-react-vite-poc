@@ -1,3 +1,4 @@
+// src/App.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
@@ -7,9 +8,15 @@ import "./App.css";
 import type { EstimateHeader, EstimateLine, ItemCatalog, Status } from "./models/estimateModels";
 import { estimateDataService } from "./services/estimateDataService";
 
+// ✅ Mock pages (static screens)
+import ForecastPage from "./pages/ForecastPage";
+import DashboardPage from "./pages/DashboardPage";
+import ReportsPage from "./pages/ReportsPage";
+
 const PAGE_SIZE = 20;
 const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
+// Existing shell navigation types
 type TopArea = "Forms" | "Reports" | "Dashboards";
 type FormsPage = "Estimates" | "Forecast";
 type View = "EstimatesList" | "EstimateDetail" | "Forecast";
@@ -75,30 +82,30 @@ function StatusPill({ value }: { value: Status }) {
       ? {
           bg: "rgba(56, 189, 248, 0.22)", // cyan
           fg: "rgba(224, 242, 254, 0.98)",
-          border: "rgba(56, 189, 248, 0.55)"
+          border: "rgba(56, 189, 248, 0.55)",
         }
       : v === "Submitted"
       ? {
           bg: "rgba(251, 191, 36, 0.22)", // amber
           fg: "rgba(255, 251, 235, 0.98)",
-          border: "rgba(251, 191, 36, 0.60)"
+          border: "rgba(251, 191, 36, 0.60)",
         }
       : v === "Approved"
       ? {
           bg: "rgba(34, 197, 94, 0.20)", // green
           fg: "rgba(240, 253, 244, 0.98)",
-          border: "rgba(34, 197, 94, 0.58)"
+          border: "rgba(34, 197, 94, 0.58)",
         }
       : v === "Completed"
       ? {
           bg: "rgba(148, 163, 184, 0.22)", // slate
           fg: "rgba(241, 245, 249, 0.98)",
-          border: "rgba(148, 163, 184, 0.55)"
+          border: "rgba(148, 163, 184, 0.55)",
         }
       : {
           bg: "rgba(148, 163, 184, 0.18)",
           fg: "rgba(241, 245, 249, 0.98)",
-          border: "rgba(148, 163, 184, 0.45)"
+          border: "rgba(148, 163, 184, 0.45)",
         };
 
   return (
@@ -117,7 +124,7 @@ function StatusPill({ value }: { value: Status }) {
         color: theme.fg,
         border: `1px solid ${theme.border}`,
         boxShadow: "0 1px 0 rgba(0,0,0,0.25)",
-        whiteSpace: "nowrap"
+        whiteSpace: "nowrap",
       }}
       aria-label={`Status: ${v}`}
       title={v}
@@ -221,7 +228,7 @@ export default function App() {
       uom: "",
       qty: 0,
       unitRate: 0,
-      notes: ""
+      notes: "",
     };
     return [pinned];
   }, [estimateTotal]);
@@ -303,7 +310,7 @@ export default function App() {
       uom: item.uom,
       qty: 1,
       unitRate: item.defaultUnitRate,
-      notes: ""
+      notes: "",
     };
 
     setLinesByEstimate((prev) => {
@@ -351,7 +358,7 @@ export default function App() {
       status: "Draft",
       dateCreated: created.toISOString(),
       dueDate: due.toISOString(),
-      lastUpdated: created.toISOString()
+      lastUpdated: created.toISOString(),
     };
 
     const initialLines: EstimateLine[] = Array.from({ length: 20 }).map((_, idx) => {
@@ -365,7 +372,7 @@ export default function App() {
         uom: it?.uom ?? "ea",
         qty: 1,
         unitRate: it?.defaultUnitRate ?? 0,
-        notes: ""
+        notes: "",
       };
     });
 
@@ -429,10 +436,10 @@ export default function App() {
         field: "status",
         headerName: "Status",
         width: 150,
-        cellRenderer: (p: any) => <StatusPill value={p.value as Status} />
+        cellRenderer: (p: any) => <StatusPill value={p.value as Status} />,
       },
       { field: "dueDate", headerName: "Due Date", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) },
-      { field: "lastUpdated", headerName: "Updated", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) }
+      { field: "lastUpdated", headerName: "Updated", width: 120, valueFormatter: (p) => formatDate(String(p.value || "")) },
     ];
   }, []);
 
@@ -451,7 +458,7 @@ export default function App() {
           searchType: "matchAny",
           allowTyping: true,
           filterList: true,
-          highlightMatch: true
+          highlightMatch: true,
         },
         valueSetter: (p) => {
           const newCode = String(p.newValue ?? "").trim().toUpperCase();
@@ -464,7 +471,7 @@ export default function App() {
             p.data.section = found.section;
           }
           return true;
-        }
+        },
       },
       { field: "description", headerName: "Description", editable: true, flex: 1, minWidth: 320 },
       { field: "uom", headerName: "UOM", width: 100, editable: true, cellEditor: "agSelectCellEditor", cellEditorParams: { values: UOM_OPTIONS } },
@@ -475,9 +482,9 @@ export default function App() {
         width: 170,
         valueGetter: (p) => (p.node.rowPinned ? estimateTotal : (Number(p.data?.qty) || 0) * (Number(p.data?.unitRate) || 0)),
         valueFormatter: (p) => formatCurrencyCAD(Number(p.value) || 0),
-        cellStyle: (p) => (p.node.rowPinned ? { fontWeight: "950" } : undefined)
+        cellStyle: (p) => (p.node.rowPinned ? { fontWeight: "950" } : undefined),
       },
-      { field: "notes", headerName: "Notes", editable: true, width: 240 }
+      { field: "notes", headerName: "Notes", editable: true, width: 240 },
     ];
   }, [estimateTotal, itemCodes, itemByCode]);
 
@@ -506,7 +513,13 @@ export default function App() {
           <div className="brandMark" />
           <div>Portal</div>
           <div className="kicker" style={{ marginLeft: 10 }}>
-            {area === "Forms" ? (view === "Forecast" ? "Forecast" : view === "EstimateDetail" ? `Estimate ${selectedHeader?.estimateId ?? ""}` : "Estimates") : area}
+            {area === "Forms"
+              ? view === "Forecast"
+                ? "Forecast"
+                : view === "EstimateDetail"
+                ? `Estimate ${selectedHeader?.estimateId ?? ""}`
+                : "Estimates"
+              : area}
           </div>
         </div>
 
@@ -611,24 +624,22 @@ export default function App() {
             </div>
           )}
 
+          {/* ✅ Render mock pages instead of placeholders */}
           {area === "Reports" && (
-            <div className="panel">
-              <div style={{ fontWeight: 950, fontSize: 16 }}>Reports</div>
-              <div className="kicker" style={{ marginTop: 6 }}>Placeholder.</div>
+            <div className="panel" style={{ flex: 1, minHeight: 0 }}>
+              <ReportsPage />
             </div>
           )}
 
           {area === "Dashboards" && (
-            <div className="panel">
-              <div style={{ fontWeight: 950, fontSize: 16 }}>Dashboards</div>
-              <div className="kicker" style={{ marginTop: 6 }}>Placeholder.</div>
+            <div className="panel" style={{ flex: 1, minHeight: 0 }}>
+              <DashboardPage />
             </div>
           )}
 
           {area === "Forms" && view === "Forecast" && (
-            <div className="panel">
-              <div style={{ fontWeight: 950, fontSize: 16 }}>Forecast</div>
-              <div className="kicker" style={{ marginTop: 6 }}>Placeholder.</div>
+            <div className="panel" style={{ flex: 1, minHeight: 0 }}>
+              <ForecastPage />
             </div>
           )}
 
