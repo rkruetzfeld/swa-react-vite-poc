@@ -1,0 +1,39 @@
+/* Base */
+.statusPill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border-radius: 999px;
+  border: 1px solid transparent;
+
+  font-weight: 750;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+
+  color: #0b1220 !important;
+}
+
+/* Default sizing */
+.statusPill--default {
+  padding: 4px 12px;
+  min-height: 24px;
+  font-size: 12.5px;
+}
+
+/* GRID sizing (denser) */
+.statusPill--grid {
+  padding: 2px 10px;
+  min-height: 20px;
+  font-size: 12px;
+}
+
+/* Vivid tones */
+.statusPill--neutral { background: #cbd5e1; border-color: #94a3b8; }
+.statusPill--info    { background: #60a5fa; border-color: #3b82f6; }
+.statusPill--success { background: #4ade80; border-color: #22c55e; }
+.statusPill--warning { background: #fbbf24; border-color: #f59e0b; }
+.statusPill--danger  { background: #f87171; border-color: #ef4444; }
+
+/* Optional: slightly sharpen in dense grids */
+.statusPill--grid:hover { filter: brightness(1.06); }
