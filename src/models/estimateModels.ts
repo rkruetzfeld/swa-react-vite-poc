@@ -1,33 +1,22 @@
-// src/models/estimateModels.ts
+import StatusPill from "../components/StatusPill";
+import type { Status } from "../models/estimateModels";
+import { toneFromEstimateStatus } from "../utils/statusTone"; // or inline it
 
-export type Status = "Draft" | "Submitted" | "Approved" | "Completed";
-
-export type EstimateHeader = {
-  estimateId: string;
-  client: string;
-  title: string;
-  status: Status;
-  dateCreated: string; // ISO
-  dueDate: string; // ISO
-  lastUpdated: string; // ISO
-};
-
-export type EstimateLine = {
-  lineId: string;
-  lineNo: number;
-  section: string;
-  costCode: string;
-  description: string;
-  uom: string;
-  qty: number;
-  unitRate: number;
-  notes?: string;
-};
-
-export type ItemCatalog = {
-  section: string;
-  costCode: string;
-  description: string;
-  uom: string;
-  defaultUnitRate: number;
-};
+{
+  headerName: "Status",
+  field: "status",
+  width: 140,
+  sortable: true,
+  filter: true,
+  cellClass: "cellStatusPill",
+  cellRenderer: (params: any) => {
+    const status = params.value as Status;
+    return (
+      <StatusPill
+        label={status}
+        tone={toneFromEstimateStatus(status)}
+        variant="grid"
+      />
+    );
+  },
+}
