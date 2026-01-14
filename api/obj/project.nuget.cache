@@ -1,0 +1,64 @@
+{
+  "version": 2,
+  "dgSpecHash": "P6m5+6locXc=",
+  "success": false,
+  "projectFilePath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+  "expectedPackageFiles": [],
+  "logs": [
+    {
+      "code": "NU1100",
+      "level": "Error",
+      "message": "Unable to resolve 'coverlet.collector (>= 6.0.4)' for 'net10.0'.",
+      "projectPath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "filePath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "libraryId": "coverlet.collector",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    },
+    {
+      "code": "NU1100",
+      "level": "Error",
+      "message": "Unable to resolve 'Microsoft.NET.Test.Sdk (>= 17.14.0)' for 'net10.0'.",
+      "projectPath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "filePath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "libraryId": "Microsoft.NET.Test.Sdk",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    },
+    {
+      "code": "NU1100",
+      "level": "Error",
+      "message": "Unable to resolve 'NUnit (>= 4.3.2)' for 'net10.0'.",
+      "projectPath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "filePath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "libraryId": "NUnit",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    },
+    {
+      "code": "NU1100",
+      "level": "Error",
+      "message": "Unable to resolve 'NUnit.Analyzers (>= 4.7.0)' for 'net10.0'.",
+      "projectPath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "filePath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "libraryId": "NUnit.Analyzers",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    },
+    {
+      "code": "NU1100",
+      "level": "Error",
+      "message": "Unable to resolve 'NUnit3TestAdapter (>= 5.0.0)' for 'net10.0'.",
+      "projectPath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "filePath": "C:\\src\\swa-react-vite-poc\\api\\api.csproj",
+      "libraryId": "NUnit3TestAdapter",
+      "targetGraphs": [
+        "net10.0"
+      ]
+    }
+  ]
+}
