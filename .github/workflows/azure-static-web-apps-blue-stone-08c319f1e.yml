@@ -34,21 +34,21 @@ jobs:
       - name: Build (Vite)
         run: npm run build
 
-      - name: Deploy to Azure Static Web Apps (serve dist)
+      - name: Deploy to Azure Static Web Apps (app + api)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
 
-          # Serve the Vite build output
-          app_location: "dist"
-
-          # No API
-          api_location: ""
-
-          # Do not let Oryx build anything
+          # App: already built by Vite
+          app_location: "/"
+          app_artifact_location: "dist"
           skip_app_build: true
+
+          # API: Azure Functions (dotnet-isolated)
+          api_location: "api/Portal.RefCache.Api"
+
 
 
       - name: Cleanup git extraheader (best-effort)
@@ -67,3 +67,4 @@ jobs:
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
           action: "close"
+          app_location: "dist"
