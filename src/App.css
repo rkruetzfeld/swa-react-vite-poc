@@ -148,7 +148,15 @@
   background: var(--panel);
   border-radius: 16px;
   padding: 12px;
+
+  /* ✅ add these */
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
+
 
 .toolbarGrid {
   display: grid;
