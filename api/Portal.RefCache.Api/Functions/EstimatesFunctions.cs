@@ -30,12 +30,14 @@ public sealed class EstimatesFunctions
             Status = q["status"],
             UpdatedFromUtc = TryParseDateTimeOffset(q["updatedFromUtc"]),
             UpdatedToUtc = TryParseDateTimeOffset(q["updatedToUtc"]),
+            Q = q["q"],
             Top = top,
             Cursor = q["cursor"],
-            IncludeDiagnostics = TryParseBool(q["includeDiagnostics"]) ?? false
+            IncludeDiagnostics = TryParseBool(q["includeDiagnostics"]) ?? false,
+            IncludeTotal = TryParseBool(q["includeTotal"]) ?? false
         };
 
-        // NEW: PoC rule - require projectId to avoid cross-partition scans
+        // PoC rule - require projectId to avoid cross-partition scans
         if (string.IsNullOrWhiteSpace(query.ProjectId))
         {
             var bad = req.CreateResponse(HttpStatusCode.BadRequest);
@@ -43,7 +45,6 @@ public sealed class EstimatesFunctions
             return bad;
         }
 
-        // Explicit validation
         if (query.Top < 1 || query.Top > 200)
         {
             var bad = req.CreateResponse(HttpStatusCode.BadRequest);
@@ -68,12 +69,12 @@ public sealed class EstimatesFunctions
         var (items, nextCursor, diagnostics) = await _repo.QueryAsync(query, ctx.CancellationToken);
 
         var res = req.CreateResponse(HttpStatusCode.OK);
-        await res.WriteAsJsonAsync(new PagedResponse<EstimateDto>
+        await res.WriteAsJsonAsync(new
         {
-            Items = items,
-            NextCursor = nextCursor,
-            PageSize = query.Top,
-            Diagnostics = diagnostics
+            items,
+            nextCursor,
+            pageSize = query.Top,
+            diagnostics
         });
 
         return res;
