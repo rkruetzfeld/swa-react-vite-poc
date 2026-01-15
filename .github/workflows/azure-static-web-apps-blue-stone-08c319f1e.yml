@@ -34,7 +34,7 @@ jobs:
       - name: Build (Vite)
         run: npm run build
 
-      - name: Deploy to Azure Static Web Apps (serve dist + api)
+      - name: Deploy to Azure Static Web Apps (serve dist only)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
@@ -45,8 +45,8 @@ jobs:
           app_location: "dist"
           skip_app_build: true
 
-          # Deploy Functions API
-          api_location: "api/Portal.RefCache.Api"
+          # IMPORTANT: Do NOT deploy Functions here (API is a dedicated Function App)
+          # api_location: ""
 
       - name: Cleanup git extraheader (best-effort)
         if: always()
