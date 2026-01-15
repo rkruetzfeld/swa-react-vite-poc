@@ -1,5 +1,7 @@
-type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
-type StatusVariant = "default" | "grid";
+import "./StatusPill.css";
+
+export type StatusTone = "neutral" | "info" | "success" | "warning" | "danger";
+export type StatusVariant = "default" | "grid";
 
 export default function StatusPill(props: {
   label: string;

@@ -1,0 +1,68 @@
+using System.Net;
+using Microsoft.Azure.Functions.Worker;
+using Microsoft.Azure.Functions.Worker.Http;
+using Microsoft.Extensions.Logging;
+using Portal.RefCache.Api.Models;
+using Portal.RefCache.Api.Storage;
+
+namespace Portal.RefCache.Api.Functions;
+
+public sealed class SeedFunctions
+{
+    private readonly ILogger<SeedFunctions> _logger;
+    private readonly IEstimatesRepository _repo;
+
+    public SeedFunctions(ILogger<SeedFunctions> logger, IEstimatesRepository repo)
+    {
+        _logger = logger;
+        _repo = repo;
+    }
+
+    [Function("SeedEstimates")]
+    public async Task<HttpResponseData> SeedEstimates(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "seed/estimates")] HttpRequestData req)
+    {
+        _logger.LogInformation("POST /api/seed/estimates");
+
+        // PoC seed data - deterministic IDs so duplicates are safely ignored
+        var sample = new[]
+        {
+            new EstimateDto
+            {
+                EstimateId = "EST-1001",
+                Name = "Bridge Deck Rehab",
+                Status = "Draft",
+                Amount = 1250000m,
+                LastUpdatedUtc = DateTimeOffset.UtcNow.AddDays(-2)
+            },
+            new EstimateDto
+            {
+                EstimateId = "EST-1002",
+                Name = "Culvert Replacement - Hwy 11",
+                Status = "Submitted",
+                Amount = 487500m,
+                LastUpdatedUtc = DateTimeOffset.UtcNow.AddDays(-5)
+            },
+            new EstimateDto
+            {
+                EstimateId = "EST-1003",
+                Name = "Intersection Signal Upgrade",
+                Status = "Approved",
+                Amount = 212000m,
+                LastUpdatedUtc = DateTimeOffset.UtcNow.AddDays(-12)
+            }
+        };
+
+        int inserted = await _repo.SeedAsync(sample);
+
+        var response = req.CreateResponse(HttpStatusCode.OK);
+        await response.WriteAsJsonAsync(new
+        {
+            ok = true,
+            inserted,
+            utc = DateTimeOffset.UtcNow
+        });
+
+        return response;
+    }
+}

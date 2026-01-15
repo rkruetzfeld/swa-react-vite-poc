@@ -48,10 +48,6 @@ jobs:
           # Deploy Functions API
           api_location: "api/Portal.RefCache.Api"
 
-
-
-
-
       - name: Cleanup git extraheader (best-effort)
         if: always()
         shell: bash
