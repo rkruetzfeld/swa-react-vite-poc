@@ -1,11 +1,11 @@
-// src/api/estimatesApi.ts
+﻿// src/api/estimatesApi.ts
 
 const DEFAULT_API_BASE = "https://pegportal-api-func-cc-001.azurewebsites.net";
 
-// Allow override via SWA/Vite env var later if you want
+// Allow override via Vite env var later (SWA env setting -> VITE_API_BASE_URL)
 function apiBase(): string {
   const v = (import.meta as any).env?.VITE_API_BASE_URL as string | undefined;
-  return (v && v.trim()) ? v.trim().replace(/\/+$/, "") : DEFAULT_API_BASE;
+  return v && v.trim() ? v.trim().replace(/\/+$/, "") : DEFAULT_API_BASE;
 }
 
 export type EstimateDto = {
@@ -58,7 +58,6 @@ export async function getEstimates(args: {
   const res = await fetch(url, { method: "GET" });
   await ensureOk(res, "GET /api/estimates");
 
-  // Your page expects { items, diagnostics? }
   return (await res.json()) as GetEstimatesResponse;
 }
 
