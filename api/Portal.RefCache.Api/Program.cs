@@ -12,8 +12,7 @@ var host = new HostBuilder()
         // Prefer SWA env var name you already set (TABLES_CONNECTION),
         // fall back to local AzureWebJobsStorage for local emulator use.
         var connectionString =
-            Environment.GetEnvironmentVariable("TABLES_CONNECTION")
-            ?? Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+            Environment.GetEnvironmentVariable("TABLES_CONNECTION");
 
         if (string.IsNullOrWhiteSpace(connectionString))
             throw new InvalidOperationException("Neither TABLES_CONNECTION nor AzureWebJobsStorage is set.");
