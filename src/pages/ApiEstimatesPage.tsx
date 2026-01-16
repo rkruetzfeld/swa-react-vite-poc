@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
+import type { ColDef } from "ag-grid-community";
 
 import "ag-grid-community/styles/ag-grid.css";
 import "ag-grid-community/styles/ag-theme-quartz.css";
@@ -8,37 +9,38 @@ import {
   getEstimates,
   getProjects,
   seedEstimates,
-  type EstimateDto,
   type ProjectDto,
-  type GetEstimatesResponse
+  type GetEstimatesResult
 } from "../api/estimatesApi";
+
+
+type EstimateRow = {
+  estimateId: string;
+  projectId: string;
+  name: string;
+  status: string;
+  createdUtc: string;
+};
 
 export default function ApiEstimatesPage() {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
   const [selectedProjectId, setSelectedProjectId] = useState<string>("PROJ-001");
 
-  const [rowData, setRowData] = useState<EstimateDto[]>([]);
+  const [rowData, setRowData] = useState<EstimateRow[]>([]);
   const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const colDefs = useMemo(
-    () => [
-      { field: "estimateId", headerName: "Estimate Id", flex: 1 },
-      { field: "projectId", headerName: "Project Id", flex: 1 },
-      { field: "name", headerName: "Name", flex: 2 },
-      { field: "status", headerName: "Status", width: 140 },
-      { field: "createdUtc", headerName: "Created (UTC)", flex: 1 }
-    ],
-    []
-  );
+  const colDefs = useMemo<ColDef<EstimateRow>[]>(() => [
+    { field: "estimateId", headerName: "Estimate Id", flex: 1, filter: true },
+    { field: "projectId", headerName: "Project Id", flex: 1, filter: true },
+    { field: "name", headerName: "Name", flex: 2, filter: true },
+    { field: "status", headerName: "Status", width: 140, filter: true },
+    { field: "createdUtc", headerName: "Created (UTC)", flex: 1, filter: true },
+  ], []);
 
-  const defaultColDef = useMemo(
-    () => ({
-      sortable: true,
-      filter: true,
-      resizable: true
-    }),
+  const defaultColDef = useMemo<ColDef<EstimateRow>>(
+    () => ({ sortable: true, resizable: true, filter: true }),
     []
   );
 
@@ -46,9 +48,13 @@ export default function ApiEstimatesPage() {
     setError(null);
     try {
       const data = await getProjects();
-      setProjects(Array.isArray(data) ? data : []);
-      // Keep whatever is selected unless empty
-      if (!selectedProjectId && data.length > 0) setSelectedProjectId(data[0].projectId);
+      const list = Array.isArray(data) ? data : [];
+      setProjects(list);
+
+      // if the current selection is empty, pick the first project (if any)
+      if (!selectedProjectId && list.length > 0) {
+        setSelectedProjectId(list[0].projectId);
+      }
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
@@ -60,16 +66,24 @@ export default function ApiEstimatesPage() {
     setDiagnostics(null);
 
     try {
-      const resp: GetEstimatesResponse = await getEstimates({
+      const resp: GetEstimatesResult = await getEstimates({
         projectId,
         top: 50,
-        includeDiagnostics: true
+        includeDiagnostics: true,
       });
 
-      // ✅ Explicitly use resp.items (array) — avoid e.map crash
       const items = resp?.items;
-      setRowData(Array.isArray(items) ? items : []);
+      const transformed: EstimateRow[] = Array.isArray(items)
+        ? items.map((item) => ({
+            estimateId: item.estimateId,
+            projectId: item.projectId,
+            name: item.name,
+            status: item.status,
+            createdUtc: item.createdUtc ?? "",
+          }))
+        : [];
 
+      setRowData(transformed);
       setDiagnostics(resp?.diagnostics ?? null);
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -85,7 +99,7 @@ export default function ApiEstimatesPage() {
     try {
       await seedEstimates();
       await loadProjects();
-      await loadEstimates(selectedProjectId);
+      if (selectedProjectId) await loadEstimates(selectedProjectId);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -117,7 +131,6 @@ export default function ApiEstimatesPage() {
             onChange={(e) => setSelectedProjectId(e.target.value)}
             disabled={loading}
           >
-            {/* keep selected value even if projects list is empty */}
             {projects.length === 0 ? (
               <option value={selectedProjectId}>{selectedProjectId || "(none)"}</option>
             ) : (
@@ -155,12 +168,11 @@ export default function ApiEstimatesPage() {
       ) : null}
 
       <div className="ag-theme-quartz" style={{ height: 520, width: "100%" }}>
-        <AgGridReact
+        <AgGridReact<EstimateRow>
           rowData={rowData}
           columnDefs={colDefs}
           defaultColDef={defaultColDef}
-          theme="legacy"          // ✅ silences error #239 while keeping your CSS imports
-          rowSelection={{ mode: "singleRow" }}  // ✅ avoid deprecated string form warning
+          rowSelection={{ mode: "singleRow" }}
         />
       </div>
     </div>
