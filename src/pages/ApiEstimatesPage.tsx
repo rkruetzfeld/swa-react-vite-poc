@@ -1,57 +1,95 @@
-// src/pages/ApiEstimatesPage.tsx
 import { useEffect, useMemo, useState } from "react";
-import { getEstimates, getProjects, seedEstimates, type EstimateDto, type ProjectDto } from "../api/estimatesApi";
+import { AgGridReact } from "ag-grid-react";
+
+import "ag-grid-community/styles/ag-grid.css";
+import "ag-grid-community/styles/ag-theme-quartz.css";
+
+import {
+  getEstimates,
+  getProjects,
+  seedEstimates,
+  type EstimateDto,
+  type ProjectDto,
+  type GetEstimatesResponse
+} from "../api/estimatesApi";
 
 export default function ApiEstimatesPage() {
   const [projects, setProjects] = useState<ProjectDto[]>([]);
-  const [projectId, setProjectId] = useState<string>("PROJ-001");
-  const [items, setItems] = useState<EstimateDto[]>([]);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [diag, setDiag] = useState<Record<string, unknown> | null>(null);
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("PROJ-001");
 
-  const canLoad = useMemo(() => !!projectId?.trim(), [projectId]);
+  const [rowData, setRowData] = useState<EstimateDto[]>([]);
+  const [diagnostics, setDiagnostics] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(false);
+
+  const colDefs = useMemo(
+    () => [
+      { field: "estimateId", headerName: "Estimate Id", flex: 1 },
+      { field: "projectId", headerName: "Project Id", flex: 1 },
+      { field: "name", headerName: "Name", flex: 2 },
+      { field: "status", headerName: "Status", width: 140 },
+      { field: "createdUtc", headerName: "Created (UTC)", flex: 1 }
+    ],
+    []
+  );
+
+  const defaultColDef = useMemo(
+    () => ({
+      sortable: true,
+      filter: true,
+      resizable: true
+    }),
+    []
+  );
 
   async function loadProjects() {
     setError(null);
     try {
       const data = await getProjects();
-      setProjects(data);
-      // If current projectId isn’t in list, default to first
-      if (data.length > 0 && !data.some(p => p.projectId === projectId)) {
-        setProjectId(data[0].projectId);
-      }
+      setProjects(Array.isArray(data) ? data : []);
+      // Keep whatever is selected unless empty
+      if (!selectedProjectId && data.length > 0) setSelectedProjectId(data[0].projectId);
     } catch (e: any) {
-      setError(e?.message || "Failed to load projects");
+      setError(e?.message ?? String(e));
     }
   }
 
-  async function loadEstimates() {
-    if (!canLoad) return;
-    setBusy(true);
+  async function loadEstimates(projectId: string) {
+    setLoading(true);
     setError(null);
+    setDiagnostics(null);
+
     try {
-      const res = await getEstimates({ projectId, top: 20, includeDiagnostics: true });
-      setItems(res.items || []);
-      setDiag((res as any).diagnostics ?? null);
+      const resp: GetEstimatesResponse = await getEstimates({
+        projectId,
+        top: 50,
+        includeDiagnostics: true
+      });
+
+      // ✅ Explicitly use resp.items (array) — avoid e.map crash
+      const items = resp?.items;
+      setRowData(Array.isArray(items) ? items : []);
+
+      setDiagnostics(resp?.diagnostics ?? null);
     } catch (e: any) {
-      setError(e?.message || "Failed to load estimates");
+      setError(e?.message ?? String(e));
+      setRowData([]);
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }
 
-  async function seed() {
-    setBusy(true);
+  async function handleSeed() {
+    setLoading(true);
     setError(null);
     try {
       await seedEstimates();
       await loadProjects();
-      await loadEstimates();
+      await loadEstimates(selectedProjectId);
     } catch (e: any) {
-      setError(e?.message || "Seed failed");
+      setError(e?.message ?? String(e));
     } finally {
-      setBusy(false);
+      setLoading(false);
     }
   }
 
@@ -61,88 +99,69 @@ export default function ApiEstimatesPage() {
   }, []);
 
   useEffect(() => {
-    loadEstimates();
+    if (selectedProjectId) {
+      loadEstimates(selectedProjectId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [projectId]);
+  }, [selectedProjectId]);
 
   return (
     <div style={{ padding: 16 }}>
-      <h2>API Estimates</h2>
+      <h2 style={{ marginTop: 0 }}>API Test Page</h2>
 
-      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 12 }}>
         <label>
           Project:&nbsp;
           <select
-            value={projectId}
-            onChange={(e) => setProjectId(e.target.value)}
-            disabled={busy}
-            style={{ minWidth: 220 }}
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            disabled={loading}
           >
-            {/* fallback option if projects fails */}
-            {projects.length === 0 ? <option value="PROJ-001">PROJ-001</option> : null}
-            {projects.map((p) => (
-              <option key={p.projectId} value={p.projectId}>
-                {p.projectId} — {p.name}
-              </option>
-            ))}
+            {/* keep selected value even if projects list is empty */}
+            {projects.length === 0 ? (
+              <option value={selectedProjectId}>{selectedProjectId || "(none)"}</option>
+            ) : (
+              projects.map((p) => (
+                <option key={p.projectId} value={p.projectId}>
+                  {p.projectId} — {p.name}
+                </option>
+              ))
+            )}
           </select>
         </label>
 
-        <button onClick={loadEstimates} disabled={busy || !canLoad}>
+        <button onClick={() => loadEstimates(selectedProjectId)} disabled={loading || !selectedProjectId}>
           Refresh
         </button>
 
-        <button onClick={seed} disabled={busy}>
+        <button onClick={handleSeed} disabled={loading}>
           Seed
         </button>
 
-        {busy ? <span>Working…</span> : null}
+        {loading ? <span>Loading…</span> : null}
       </div>
 
       {error ? (
-        <div style={{ padding: 12, background: "#fee", border: "1px solid #f99", marginBottom: 12 }}>
+        <div style={{ marginBottom: 12, padding: 12, border: "1px solid #cc0000" }}>
           <strong>Error:</strong> {error}
         </div>
       ) : null}
 
-      <div style={{ border: "1px solid #ddd", borderRadius: 8, padding: 12 }}>
-        <h3 style={{ marginTop: 0 }}>Results ({items.length})</h3>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px 6px" }}>EstimateId</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px 6px" }}>ProjectId</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px 6px" }}>Name</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px 6px" }}>Status</th>
-              <th style={{ textAlign: "left", borderBottom: "1px solid #ddd", padding: "8px 6px" }}>CreatedUtc</th>
-            </tr>
-          </thead>
-          <tbody>
-            {items.map((x) => (
-              <tr key={`${x.projectId}-${x.estimateId}`}>
-                <td style={{ padding: "8px 6px", borderBottom: "1px solid #f0f0f0" }}>{x.estimateId}</td>
-                <td style={{ padding: "8px 6px", borderBottom: "1px solid #f0f0f0" }}>{x.projectId}</td>
-                <td style={{ padding: "8px 6px", borderBottom: "1px solid #f0f0f0" }}>{x.name}</td>
-                <td style={{ padding: "8px 6px", borderBottom: "1px solid #f0f0f0" }}>{x.status}</td>
-                <td style={{ padding: "8px 6px", borderBottom: "1px solid #f0f0f0" }}>{x.createdUtc}</td>
-              </tr>
-            ))}
-            {items.length === 0 ? (
-              <tr>
-                <td colSpan={5} style={{ padding: 12 }}>
-                  No results
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+      {diagnostics ? (
+        <details style={{ marginBottom: 12 }}>
+          <summary>Diagnostics</summary>
+          <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(diagnostics, null, 2)}</pre>
+        </details>
+      ) : null}
 
-        {diag ? (
-          <details style={{ marginTop: 12 }}>
-            <summary>Diagnostics</summary>
-            <pre style={{ whiteSpace: "pre-wrap" }}>{JSON.stringify(diag, null, 2)}</pre>
-          </details>
-        ) : null}
+      <div className="ag-theme-quartz" style={{ height: 520, width: "100%" }}>
+        <AgGridReact
+          rowData={rowData}
+          columnDefs={colDefs}
+          defaultColDef={defaultColDef}
+          theme="legacy"          // ✅ silences error #239 while keeping your CSS imports
+          rowSelection={{ mode: "singleRow" }}  // ✅ avoid deprecated string form warning
+        />
       </div>
     </div>
   );
