@@ -10,9 +10,11 @@ import {
   getProjects,
   seedEstimates,
   type ProjectDto,
-  type GetEstimatesResult
+  // If you chose Option A, use GetEstimatesResult instead.
+  type GetEstimatesResult,
+  // If you chose Option B (alias), you can import GetEstimatesResponse instead.
+  // type GetEstimatesResponse,
 } from "../api/estimatesApi";
-
 
 type EstimateRow = {
   estimateId: string;
@@ -31,13 +33,16 @@ export default function ApiEstimatesPage() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
 
-  const colDefs = useMemo<ColDef<EstimateRow>[]>(() => [
-    { field: "estimateId", headerName: "Estimate Id", flex: 1, filter: true },
-    { field: "projectId", headerName: "Project Id", flex: 1, filter: true },
-    { field: "name", headerName: "Name", flex: 2, filter: true },
-    { field: "status", headerName: "Status", width: 140, filter: true },
-    { field: "createdUtc", headerName: "Created (UTC)", flex: 1, filter: true },
-  ], []);
+  const colDefs = useMemo<ColDef<EstimateRow>[]>(
+    () => [
+      { field: "estimateId", headerName: "Estimate Id", flex: 1, filter: true },
+      { field: "projectId", headerName: "Project Id", flex: 1, filter: true },
+      { field: "name", headerName: "Name", flex: 2, filter: true },
+      { field: "status", headerName: "Status", width: 140, filter: true },
+      { field: "createdUtc", headerName: "Created (UTC)", flex: 1, filter: true },
+    ],
+    []
+  );
 
   const defaultColDef = useMemo<ColDef<EstimateRow>>(
     () => ({ sortable: true, resizable: true, filter: true }),
@@ -48,13 +53,8 @@ export default function ApiEstimatesPage() {
     setError(null);
     try {
       const data = await getProjects();
-      const list = Array.isArray(data) ? data : [];
-      setProjects(list);
-
-      // if the current selection is empty, pick the first project (if any)
-      if (!selectedProjectId && list.length > 0) {
-        setSelectedProjectId(list[0].projectId);
-      }
+      setProjects(Array.isArray(data) ? data : []);
+      if (!selectedProjectId && data.length > 0) setSelectedProjectId(data[0].projectId);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     }
@@ -99,7 +99,7 @@ export default function ApiEstimatesPage() {
     try {
       await seedEstimates();
       await loadProjects();
-      if (selectedProjectId) await loadEstimates(selectedProjectId);
+      await loadEstimates(selectedProjectId);
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -113,9 +113,7 @@ export default function ApiEstimatesPage() {
   }, []);
 
   useEffect(() => {
-    if (selectedProjectId) {
-      loadEstimates(selectedProjectId);
-    }
+    if (selectedProjectId) loadEstimates(selectedProjectId);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedProjectId]);
 
