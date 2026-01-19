@@ -13,8 +13,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # Frontend-only SWA deployment.
-      # API is deployed separately as an Azure Function App (pegportal-api-func-cc-001).
       - name: Deploy to Azure Static Web Apps (app only)
         uses: Azure/static-web-apps-deploy@v1
         env:
@@ -26,10 +24,16 @@ jobs:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
-          app_location: "/"
+
+          # Vite app is at repo root
+          app_location: "."
+
+          # Vite build output folder
           output_location: "dist"
+
+          # No SWA managed API
           api_location: ""
           skip_app_build: false
           skip_api_build: true
-          deployment_environment: "production"
 
+          deployment_environment: "production"
