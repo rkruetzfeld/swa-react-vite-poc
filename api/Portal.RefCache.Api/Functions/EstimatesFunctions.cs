@@ -1,6 +1,7 @@
 using System.Net;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
+using Portal.RefCache.Api.Auth;
 using Portal.RefCache.Api.Models;
 using Portal.RefCache.Api.Repositories;
 
@@ -13,6 +14,36 @@ public sealed class EstimatesFunctions
     public EstimatesFunctions(IEstimatesRepository repo)
     {
         _repo = repo;
+    }
+
+    [Function("CreateEstimate")]
+    public async Task<HttpResponseData> CreateEstimate(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "estimates")] HttpRequestData req,
+        FunctionContext ctx)
+    {
+        var auth = RequestAuth.TryGetAuthContext(req);
+        if (auth is null) return await RequestAuth.Unauthorized(req);
+        if (!RequestAuth.HasAnyRole(auth, "authenticated")) return await RequestAuth.Forbidden(req);
+
+        var body = await req.ReadFromJsonAsync<CreateEstimateRequest>(cancellationToken: ctx.CancellationToken);
+        if (body is null)
+        {
+            var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+            await bad.WriteStringAsync("Missing or invalid JSON body.");
+            return bad;
+        }
+
+        if (string.IsNullOrWhiteSpace(body.ProjectId) || string.IsNullOrWhiteSpace(body.Name))
+        {
+            var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+            await bad.WriteStringAsync("projectId and name are required.");
+            return bad;
+        }
+
+        var created = await _repo.CreateAsync(body, ctx.CancellationToken);
+        var res = req.CreateResponse(HttpStatusCode.Created);
+        await res.WriteAsJsonAsync(created);
+        return res;
     }
 
     [Function("GetEstimates")]
@@ -105,6 +136,55 @@ public sealed class EstimatesFunctions
         var ok = req.CreateResponse(HttpStatusCode.OK);
         await ok.WriteAsJsonAsync(dto);
         return ok;
+    }
+
+    [Function("UpdateEstimate")]
+    public async Task<HttpResponseData> UpdateEstimate(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "put", Route = "estimates/{projectId}/{estimateId}")] HttpRequestData req,
+        string projectId,
+        string estimateId,
+        FunctionContext ctx)
+    {
+        var auth = RequestAuth.TryGetAuthContext(req);
+        if (auth is null) return await RequestAuth.Unauthorized(req);
+        if (!RequestAuth.HasAnyRole(auth, "authenticated")) return await RequestAuth.Forbidden(req);
+
+        var body = await req.ReadFromJsonAsync<UpdateEstimateRequest>(cancellationToken: ctx.CancellationToken);
+        if (body is null)
+        {
+            var bad = req.CreateResponse(HttpStatusCode.BadRequest);
+            await bad.WriteStringAsync("Missing or invalid JSON body.");
+            return bad;
+        }
+
+        var updated = await _repo.UpdateAsync(projectId, estimateId, body, ctx.CancellationToken);
+        if (updated is null)
+        {
+            var nf = req.CreateResponse(HttpStatusCode.NotFound);
+            await nf.WriteStringAsync("Estimate not found.");
+            return nf;
+        }
+
+        var ok = req.CreateResponse(HttpStatusCode.OK);
+        await ok.WriteAsJsonAsync(updated);
+        return ok;
+    }
+
+    [Function("DeleteEstimate")]
+    public async Task<HttpResponseData> DeleteEstimate(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "estimates/{projectId}/{estimateId}")] HttpRequestData req,
+        string projectId,
+        string estimateId,
+        FunctionContext ctx)
+    {
+        var auth = RequestAuth.TryGetAuthContext(req);
+        if (auth is null) return await RequestAuth.Unauthorized(req);
+        if (!RequestAuth.HasAnyRole(auth, "authenticated")) return await RequestAuth.Forbidden(req);
+
+        var deleted = await _repo.DeleteAsync(projectId, estimateId, ctx.CancellationToken);
+        var res = req.CreateResponse(deleted ? HttpStatusCode.OK : HttpStatusCode.NotFound);
+        await res.WriteAsJsonAsync(new { ok = deleted });
+        return res;
     }
 
     private static int? TryParseInt(string? s) => int.TryParse(s, out var v) ? v : null;

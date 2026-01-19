@@ -42,9 +42,18 @@ var host = new HostBuilder()
         // Add it as hosted service (framework will resolve the concrete type)
         services.AddHostedService(sp => sp.GetRequiredService<MultiTableInitializer>());
 
-        // Repos
+        // Repos (Estimates: prefer Cosmos when configured; fallback to Tables)
         services.AddSingleton<IEstimatesRepository>(sp =>
         {
+            var cosmosConnection = Environment.GetEnvironmentVariable("COSMOS_CONNECTION");
+            if (!string.IsNullOrWhiteSpace(cosmosConnection))
+            {
+                var options = sp.GetService<CosmosOptions>();
+                var client = sp.GetService<CosmosClient>();
+                if (options is not null && client is not null)
+                    return new CosmosEstimatesRepository(client, options);
+            }
+
             var factory = sp.GetRequiredService<Func<string, TableClient>>();
             return new TableEstimatesRepository(
                 factory(TableNames.Estimates),

@@ -129,6 +129,76 @@ public sealed class TableEstimatesRepository : IEstimatesRepository
         }
     }
 
+    public async Task<EstimateDto> CreateAsync(CreateEstimateRequest req, CancellationToken ct)
+    {
+        await EnsureTablesAsync(ct);
+
+        if (string.IsNullOrWhiteSpace(req.ProjectId)) throw new ArgumentException("ProjectId is required.");
+        if (string.IsNullOrWhiteSpace(req.Name)) throw new ArgumentException("Name is required.");
+
+        var now = DateTimeOffset.UtcNow;
+        var estimateId = $"EST-{req.ProjectId.Trim()}-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}";
+
+        var entity = new EstimateEntity
+        {
+            PartitionKey = req.ProjectId.Trim(),
+            RowKey = estimateId,
+            EstimateId = estimateId,
+            ProjectId = req.ProjectId.Trim(),
+            Name = req.Name.Trim(),
+            Status = string.IsNullOrWhiteSpace(req.Status) ? "Draft" : req.Status!.Trim(),
+            CreatedUtc = now,
+            UpdatedUtc = now,
+            Amount = req.Amount ?? 0,
+            Currency = string.IsNullOrWhiteSpace(req.Currency) ? "CAD" : req.Currency!.Trim()
+        };
+
+        await _estimatesTable.UpsertEntityAsync(entity, TableUpdateMode.Merge, ct);
+        return EstimateMapper.ToDto(entity);
+    }
+
+    public async Task<EstimateDto?> UpdateAsync(string projectId, string estimateId, UpdateEstimateRequest req, CancellationToken ct)
+    {
+        await EnsureTablesAsync(ct);
+
+        var existing = await GetByIdAsync(projectId, estimateId, ct);
+        if (existing is null) return null;
+
+        var now = DateTimeOffset.UtcNow;
+
+        var entity = new EstimateEntity
+        {
+            PartitionKey = projectId,
+            RowKey = estimateId,
+            EstimateId = estimateId,
+            ProjectId = projectId,
+            Name = (req.Name ?? existing.Name).Trim(),
+            Status = string.IsNullOrWhiteSpace(req.Status) ? existing.Status : req.Status!.Trim(),
+            CreatedUtc = existing.CreatedUtc,
+            UpdatedUtc = now,
+            Amount = req.Amount ?? existing.Amount ?? 0,
+            Currency = string.IsNullOrWhiteSpace(req.Currency) ? existing.Currency : req.Currency!.Trim()
+        };
+
+        await _estimatesTable.UpsertEntityAsync(entity, TableUpdateMode.Merge, ct);
+        return EstimateMapper.ToDto(entity);
+    }
+
+    public async Task<bool> DeleteAsync(string projectId, string estimateId, CancellationToken ct)
+    {
+        await EnsureTablesAsync(ct);
+
+        try
+        {
+            await _estimatesTable.DeleteEntityAsync(projectId, estimateId, cancellationToken: ct);
+            return true;
+        }
+        catch (RequestFailedException ex) when (ex.Status == 404)
+        {
+            return false;
+        }
+    }
+
     public async Task SeedAsync(CancellationToken ct)
     {
         await EnsureTablesAsync(ct);
