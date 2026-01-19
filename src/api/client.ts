@@ -19,6 +19,8 @@ export async function apiGet<T>(path: string, opts?: ApiClientOptions): Promise<
   const baseUrl = getBaseUrl(opts?.baseUrl);
   const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 
+  console.log("apiGet URL:", url); // ← ADD THIS LINE
+
   const token = await getAccessTokenOrRedirect(pca);
 
   const res = await fetch(url, {
@@ -28,6 +30,7 @@ export async function apiGet<T>(path: string, opts?: ApiClientOptions): Promise<
       "Authorization": `Bearer ${token}`,
     },
   });
+
 
   if (!res.ok) {
     const body = await res.text().catch(() => "");
