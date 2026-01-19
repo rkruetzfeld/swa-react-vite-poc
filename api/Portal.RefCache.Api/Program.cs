@@ -1,8 +1,11 @@
 using Azure.Data.Tables;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Portal.RefCache.Api.Repositories;
+using Portal.RefCache.Api.Cosmos;
+using Portal.RefCache.Api.Domain.Repositories;
 using Portal.RefCache.Api.Storage;
 
 var host = new HostBuilder()
@@ -53,6 +56,42 @@ var host = new HostBuilder()
             var factory = sp.GetRequiredService<Func<string, TableClient>>();
             return new TableProjectsRepository(factory(TableNames.Projects));
         });
+
+        // Cosmos (core domain)
+        var cosmosConnection = Environment.GetEnvironmentVariable("COSMOS_CONNECTION");
+        if (!string.IsNullOrWhiteSpace(cosmosConnection))
+        {
+            var cosmosDb = Environment.GetEnvironmentVariable("COSMOS_DATABASE") ?? "Ledger";
+            var cosmosContainer = Environment.GetEnvironmentVariable("COSMOS_CONTAINER") ?? "Estimates";
+            var ensureCreated = string.Equals(Environment.GetEnvironmentVariable("COSMOS_ENSURE_CREATED"), "true", StringComparison.OrdinalIgnoreCase);
+
+            var cosmosOptions = new CosmosOptions
+            {
+                ConnectionString = cosmosConnection,
+                Database = cosmosDb,
+                Container = cosmosContainer,
+                EnsureCreated = ensureCreated
+            };
+            services.AddSingleton(cosmosOptions);
+
+            services.AddSingleton(sp => new CosmosClient(
+                cosmosOptions.ConnectionString,
+                new CosmosClientOptions
+                {
+                    SerializerOptions = new CosmosSerializationOptions
+                    {
+                        PropertyNamingPolicy = CosmosPropertyNamingPolicy.CamelCase
+                    }
+                }));
+
+            services.AddHostedService<CosmosInitializer>();
+            services.AddSingleton<ICoreEstimatesRepository, CosmosCoreEstimatesRepository>();
+        }
+        else
+        {
+            // Allow app to start without Cosmos configured.
+            services.AddSingleton<ICoreEstimatesRepository, NullCoreEstimatesRepository>();
+        }
     })
     .Build();
 
