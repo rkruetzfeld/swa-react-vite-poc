@@ -1,4 +1,7 @@
 // src/api/client.ts
+import { pca } from "../auth/pca";
+import { getAccessTokenOrRedirect } from "../auth/getAccessToken";
+
 export type ApiClientOptions = {
   baseUrl?: string;
 };
@@ -16,9 +19,14 @@ export async function apiGet<T>(path: string, opts?: ApiClientOptions): Promise<
   const baseUrl = getBaseUrl(opts?.baseUrl);
   const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 
+  const token = await getAccessTokenOrRedirect(pca);
+
   const res = await fetch(url, {
     method: "GET",
-    headers: { "Accept": "application/json" },
+    headers: {
+      "Accept": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
   });
 
   if (!res.ok) {
@@ -33,11 +41,14 @@ export async function apiPost<T>(path: string, body?: unknown, opts?: ApiClientO
   const baseUrl = getBaseUrl(opts?.baseUrl);
   const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 
+  const token = await getAccessTokenOrRedirect(pca);
+
   const res = await fetch(url, {
     method: "POST",
     headers: {
       "Accept": "application/json",
       "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`,
     },
     body: body === undefined ? undefined : JSON.stringify(body),
   });

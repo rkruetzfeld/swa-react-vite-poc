@@ -14,6 +14,8 @@ import ForecastPage from "./pages/ForecastPage";
 import DashboardPage from "./pages/DashboardPage";
 import ReportsPage from "./pages/ReportsPage";
 import ApiEstimatesPage from "./pages/ApiEstimatesPage";
+import SmokeTestPage from "./pages/SmokeTestPage";
+import SignOutButton from "./auth/SignOutButton";
 
 // ✅ Shared component
 import StatusPill, { type StatusTone } from "./components/StatusPill";
@@ -23,8 +25,8 @@ const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
 // Shell navigation types
 type TopArea = "Forms" | "Reports" | "Dashboards";
-type FormsPage = "Estimates" | "Forecast" | "API";
-type View = "EstimatesList" | "EstimateDetail" | "Forecast" | "ApiEstimates";
+type FormsPage = "Estimates" | "Forecast" | "API" | "Smoke";
+type View = "EstimatesList" | "EstimateDetail" | "Forecast" | "ApiEstimates" | "SmokeTest";
 
 type PinKey = `Forms:${FormsPage}`;
 
@@ -211,6 +213,14 @@ export default function App() {
     setFormsExpanded(true);
     setFormsPage("API");
     setView("ApiEstimates");
+    if (isDrawer) setSidebarOpen(false);
+  }
+
+  function goSmoke() {
+    setArea("Forms");
+    setFormsExpanded(true);
+    setFormsPage("Smoke");
+    setView("SmokeTest");
     if (isDrawer) setSidebarOpen(false);
   }
 
@@ -486,6 +496,8 @@ export default function App() {
                 ? "Forecast"
                 : view === "ApiEstimates"
                 ? "API Test"
+                : view === "SmokeTest"
+                ? "Smoke Test"
                 : view === "EstimateDetail"
                 ? `Estimate ${selectedHeader?.estimateId ?? ""}`
                 : "Estimates"
@@ -505,6 +517,8 @@ export default function App() {
               {sidebarOpen ? "Close" : "Menu"}
             </button>
           )}
+
+          <SignOutButton />
         </div>
       </div>
 
@@ -566,6 +580,15 @@ export default function App() {
                     {pins.has("Forms:API") ? "★" : "☆"}
                   </button>
                 </div>
+
+                <div className="navRow">
+                  <button className={`navBtn ${formsPage === "Smoke" && view === "SmokeTest" ? "navBtnActive" : ""}`} onClick={goSmoke}>
+                    Smoke Test
+                  </button>
+                  <button className="pinBtn" onClick={() => togglePin("Forms:Smoke")} title={pins.has("Forms:Smoke") ? "Unpin" : "Pin"}>
+                    {pins.has("Forms:Smoke") ? "★" : "☆"}
+                  </button>
+                </div>
               </div>
             )}
 
@@ -596,6 +619,11 @@ export default function App() {
               {pins.has("Forms:API") && (
                 <button className="navBtn" onClick={goApi}>
                   API Test
+                </button>
+              )}
+              {pins.has("Forms:Smoke") && (
+                <button className="navBtn" onClick={goSmoke}>
+                  Smoke Test
                 </button>
               )}
             </div>
@@ -634,6 +662,12 @@ export default function App() {
           {area === "Forms" && view === "ApiEstimates" && (
             <div className="panel" style={{ flex: 1, minHeight: 0 }}>
               <ApiEstimatesPage />
+            </div>
+          )}
+
+          {area === "Forms" && view === "SmokeTest" && (
+            <div className="panel" style={{ flex: 1, minHeight: 0 }}>
+              <SmokeTestPage />
             </div>
           )}
 

@@ -11,6 +11,8 @@
     "generate:data": "node scripts/generate-sample-data.mjs"
   },
   "dependencies": {
+    "@azure/msal-browser": "^5.0.2",
+    "@azure/msal-react": "^5.0.2",
     "ag-grid-community": "^35.0.0",
     "ag-grid-react": "^35.0.0",
     "react": "^19.2.0",
