@@ -53,20 +53,27 @@ async function loadProjects() {
   try {
     append("GET /api/projects");
 
-    const data = await apiGet<{ items: ProjectDto[] }>("/api/projects");
-    const items = Array.isArray(data?.items) ? data.items : [];
+    const data = await apiGet<{ items: any[] }>("/api/projects");
+    const raw = Array.isArray(data?.items) ? data.items : [];
 
-    setProjects(items);
-    const first = items.length > 0 ? items[0].projectId : "";
-    setSelectedProjectId((prev) => prev || first);
+    const mapped: ProjectDto[] = raw.map((x) => ({
+      projectId: x.projectId ?? x.ProjectId ?? "",
+      name: x.name ?? x.Name ?? "",
+    })).filter(p => p.projectId);
 
-    append(`Loaded ${items.length} projects`);
+    setProjects(mapped);
+
+    const first = mapped.length > 0 ? mapped[0].projectId : "";
+    if (first) setSelectedProjectId(first);
+
+    append(`Loaded ${mapped.length} projects`);
   } catch (e: any) {
     append(`ERROR: ${e?.message ?? String(e)}`);
   } finally {
     setBusy(false);
   }
 }
+
 
 
   async function createEstimate() {
