@@ -22,7 +22,27 @@ public sealed class ProjectsFunctions
         var items = await _projects.ListAsync(ctx.CancellationToken);
 
         var res = req.CreateResponse(HttpStatusCode.OK);
-        await res.WriteAsJsonAsync(items); // <-- return raw array
+
+        // TEMP DEBUG: proves which code is deployed + what storage it’s reading
+        var tablesConn = Environment.GetEnvironmentVariable("TABLES_CONNECTION") ?? "";
+        var accountName = "unknown";
+        foreach (var part in tablesConn.Split(';', StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (part.StartsWith("AccountName=", StringComparison.OrdinalIgnoreCase))
+            {
+                accountName = part.Split('=', 2)[1];
+                break;
+            }
+        }
+
+        await res.WriteAsJsonAsync(new
+        {
+            marker = "PROJECTS_V2_ARRAY_2026-01-19",
+            storageAccount = accountName,
+            count = items.Count,
+            items
+        });
+
         return res;
     }
 }
