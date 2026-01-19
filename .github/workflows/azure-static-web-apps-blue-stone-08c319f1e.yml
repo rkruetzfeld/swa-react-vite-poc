@@ -7,47 +7,32 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-    name: Build and Deploy (dist)
+    name: Build and Deploy (app + api)
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Use Node.js 20
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install dependencies
-        run: npm ci
-
-      - name: Build (Vite)
-        run: npm run build
-
-      - name: Deploy to Azure Static Web Apps (dist)
+      # SWA build engine will build the Vite app and the Functions API.
+      # Node is still useful for the app build; .NET is handled in the API build step.
+      - name: Deploy to Azure Static Web Apps (app + api)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
 
-          # Deploy exactly what's in dist
-          app_location: "dist"
+          # Repo root for Vite app
+          app_location: "/"
 
-          # No API from this workflow
-          api_location: ""
+          # Vite build output folder
+          output_location: "dist"
 
-          # We already built dist
-          skip_app_build: true
-          skip_api_build: true
+          # IMPORTANT: point to the .NET isolated Functions project folder
+          api_location: "api/Portal.RefCache.Api"
 
+          # Let SWA do the build
+          skip_app_build: false
+          skip_api_build: false
 
-          # This helps avoid “wrong environment” surprises
           deployment_environment: "production"
-      - name: Verify dist output
-        run: |
-          echo "---- dist listing ----"
-          ls -la dist
-          echo "---- dist/index.html (first 30 lines) ----"
-          sed -n '1,30p' dist/index.html
