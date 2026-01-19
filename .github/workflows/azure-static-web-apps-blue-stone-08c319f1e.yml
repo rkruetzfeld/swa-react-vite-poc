@@ -24,8 +24,10 @@ jobs:
       - name: Build (Vite)
         env:
           VITE_AAD_TENANT_ID: ${{ secrets.VITE_AAD_TENANT_ID }}
+          # map your existing secret name -> expected env var name
           VITE_AAD_SPA_CLIENT_ID: ${{ secrets.VITE_AAD_SPA_CLIENT_ID }}
           VITE_AAD_API_SCOPE: ${{ secrets.VITE_AAD_API_SCOPE }}
+          # map your existing secret name -> expected env var name
           VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
         run: npm run build
 
@@ -36,11 +38,11 @@ jobs:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
 
-          # We already built. Upload the dist folder directly.
+          # Upload the built site
           app_location: "dist"
           output_location: ""
 
-          # No SWA managed API
+          # No managed API
           api_location: ""
           skip_app_build: true
           skip_api_build: true
