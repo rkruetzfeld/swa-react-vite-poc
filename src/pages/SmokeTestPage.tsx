@@ -48,21 +48,26 @@ export default function SmokeTestPage() {
   }
 }
 
-  async function loadProjects() {
-    setBusy(true);
-    try {
-      append("GET /api/projects");
-      const data = await apiGet<ProjectDto[]>("/api/projects");
-      setProjects(Array.isArray(data) ? data : []);
-      const first = Array.isArray(data) && data.length > 0 ? data[0].projectId : "";
-      setSelectedProjectId((prev) => prev || first);
-      append(`Loaded ${Array.isArray(data) ? data.length : 0} projects`);
-    } catch (e: any) {
-      append(`ERROR: ${e?.message ?? String(e)}`);
-    } finally {
-      setBusy(false);
-    }
+async function loadProjects() {
+  setBusy(true);
+  try {
+    append("GET /api/projects");
+
+    const data = await apiGet<{ items: ProjectDto[] }>("/api/projects");
+    const items = Array.isArray(data?.items) ? data.items : [];
+
+    setProjects(items);
+    const first = items.length > 0 ? items[0].projectId : "";
+    setSelectedProjectId((prev) => prev || first);
+
+    append(`Loaded ${items.length} projects`);
+  } catch (e: any) {
+    append(`ERROR: ${e?.message ?? String(e)}`);
+  } finally {
+    setBusy(false);
   }
+}
+
 
   async function createEstimate() {
     if (!selectedProjectId) {
