@@ -34,6 +34,20 @@ export default function SmokeTestPage() {
     });
   }
 
+  async function seedEstimates() {
+  setBusy(true);
+  try {
+    append("POST /api/seed/estimates");
+
+    await apiPost("/api/seed/estimates", {});
+    append("Seed response: OK");
+  } catch (e: any) {
+    append(`ERROR: ${e?.message ?? String(e)}`);
+  } finally {
+    setBusy(false);
+  }
+}
+
   async function loadProjects() {
     setBusy(true);
     try {
@@ -122,6 +136,7 @@ export default function SmokeTestPage() {
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 12 }}>
         <button onClick={loadProjects} disabled={busy}>Load Projects</button>
+        <button onClick={seedEstimates} disabled={busy}>Seed Estimates</button>
         <button onClick={createEstimate} disabled={busy || !selectedProjectId}>Create Estimate</button>
         <button onClick={loadEstimates} disabled={busy || !selectedProjectId}>Load Estimates</button>
         <button onClick={loadEstimateById} disabled={busy || !createdEstimateId}>Load Created By Id</button>
@@ -153,7 +168,15 @@ export default function SmokeTestPage() {
 
       <div style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 700, marginBottom: 6 }}>Estimates</div>
-        <div style={{ border: "1px solid rgba(255,255,255,0.15)", borderRadius: 8, padding: 12, maxHeight: 240, overflow: "auto" }}>
+        <div
+          style={{
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 8,
+            padding: 12,
+            maxHeight: 240,
+            overflow: "auto",
+          }}
+        >
           {estimates.length === 0 ? (
             <div style={{ opacity: 0.75 }}>(none loaded)</div>
           ) : (
@@ -173,7 +196,12 @@ export default function SmokeTestPage() {
         <textarea
           value={log}
           readOnly
-          style={{ width: "100%", minHeight: 220, fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace" }}
+          style={{
+            width: "100%",
+            minHeight: 220,
+            fontFamily:
+              "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
+          }}
         />
       </div>
     </div>
