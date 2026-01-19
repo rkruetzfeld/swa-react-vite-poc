@@ -7,15 +7,15 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-    name: Build and Deploy (app + api)
+    name: Build and Deploy (app only)
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # SWA build engine will build the Vite app and the Functions API.
-      # Node is still useful for the app build; .NET is handled in the API build step.
-      - name: Deploy to Azure Static Web Apps (app + api)
+      # Frontend-only SWA deployment.
+      # API is deployed separately as an Azure Function App (pegportal-api-func-cc-001).
+      - name: Deploy to Azure Static Web Apps (app only)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
@@ -28,11 +28,13 @@ jobs:
           # Vite build output folder
           output_location: "dist"
 
-          # IMPORTANT: point to the .NET isolated Functions project folder
-          api_location: "api/Portal.RefCache.Api"
+          # IMPORTANT: no SWA managed API
+          api_location: ""
 
-          # Let SWA do the build
+          # Let SWA do the app build
           skip_app_build: false
-          skip_api_build: false
+
+          # Skip API build/deploy entirely
+          skip_api_build: true
 
           deployment_environment: "production"
