@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client";
+import { apiDelete, apiGet, apiPost } from "./client";
 
 export type CreateEstimateRequest = {
   projectId: string;
@@ -113,5 +113,19 @@ export async function coreBatchUpsertLineItems(
       estimateId
     )}/versions/${encodeURIComponent(versionId)}/line-items:batchUpsert`,
     { items }
+  );
+}
+
+export async function coreDeleteLineItem(
+  estimateId: string,
+  versionId: string,
+  lineItemId: string
+) {
+  return apiDelete<void>(
+    `/api/core/estimates/${encodeURIComponent(
+      estimateId
+    )}/versions/${encodeURIComponent(versionId)}/line-items/${encodeURIComponent(
+      lineItemId
+    )}`
   );
 }

@@ -65,3 +65,26 @@ export async function apiPost<T>(path: string, body?: unknown, opts?: ApiClientO
   const txt = await res.text();
   return (txt ? (JSON.parse(txt) as T) : ({} as T));
 }
+
+export async function apiDelete<T>(path: string, opts?: ApiClientOptions): Promise<T> {
+  const baseUrl = getBaseUrl(opts?.baseUrl);
+  const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
+
+  const token = await getAccessTokenOrRedirect(pca);
+
+  const res = await fetch(url, {
+    method: "DELETE",
+    headers: {
+      "Accept": "application/json",
+      "Authorization": `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`DELETE ${url} failed: ${res.status} ${res.statusText} ${text}`);
+  }
+
+  const txt = await res.text();
+  return (txt ? (JSON.parse(txt) as T) : ({} as T));
+}

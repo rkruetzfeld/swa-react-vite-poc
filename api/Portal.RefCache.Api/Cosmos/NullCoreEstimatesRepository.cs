@@ -33,4 +33,7 @@ public sealed class NullCoreEstimatesRepository : ICoreEstimatesRepository
 
     public Task BatchUpsertLineItemsAsync(string tenantId, string estimateId, string versionId, string updatedBy, BatchUpsertLineItemsRequest req, CancellationToken ct)
         => throw NotConfigured();
+
+    public Task<bool> DeleteLineItemAsync(string tenantId, string estimateId, string versionId, string lineItemId, CancellationToken ct)
+        => throw NotConfigured();
 }

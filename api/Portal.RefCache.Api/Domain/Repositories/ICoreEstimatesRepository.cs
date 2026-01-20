@@ -14,4 +14,6 @@ public interface ICoreEstimatesRepository
 
     Task<(IReadOnlyList<EstimateLineItemDoc> Items, string? ContinuationToken)> ListLineItemsAsync(string tenantId, string estimateId, string versionId, int top, string? continuationToken, CancellationToken ct);
     Task BatchUpsertLineItemsAsync(string tenantId, string estimateId, string versionId, string updatedBy, BatchUpsertLineItemsRequest req, CancellationToken ct);
+
+    Task<bool> DeleteLineItemAsync(string tenantId, string estimateId, string versionId, string lineItemId, CancellationToken ct);
 }

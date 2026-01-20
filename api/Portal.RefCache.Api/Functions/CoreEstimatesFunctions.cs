@@ -203,4 +203,29 @@ public sealed class CoreEstimatesFunctions
         await res.WriteStringAsync("OK");
         return res;
     }
+
+    [Function("Core_DeleteLineItem")]
+    public async Task<HttpResponseData> DeleteLineItem(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "delete", Route = "core/estimates/{estimateId}/versions/{versionId}/line-items/{lineItemId}")] HttpRequestData req,
+        string estimateId,
+        string versionId,
+        string lineItemId,
+        FunctionContext ctx)
+    {
+        var auth = RequestAuth.TryGetAuthContext(req);
+        if (auth is null) return await RequestAuth.Unauthorized(req);
+        if (!RequestAuth.HasAnyRole(auth, "authenticated", "Estimate.Editor", "Estimate.Admin"))
+            return await RequestAuth.Forbidden(req);
+
+        var ok = await _repo.DeleteLineItemAsync(auth.TenantId, estimateId, versionId, lineItemId, ctx.CancellationToken);
+        if (!ok)
+        {
+            var nf = req.CreateResponse(HttpStatusCode.NotFound);
+            await nf.WriteStringAsync("Line item not found.");
+            return nf;
+        }
+
+        var res = req.CreateResponse(HttpStatusCode.NoContent);
+        return res;
+    }
 }

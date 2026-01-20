@@ -260,4 +260,22 @@ public sealed class CosmosCoreEstimatesRepository : ICoreEstimatesRepository
                 throw new CosmosException($"Failed batch upsert. Status: {resp.StatusCode}", resp.StatusCode, 0, resp.ActivityId, resp.RequestCharge);
         }
     }
+
+    public async Task<bool> DeleteLineItemAsync(string tenantId, string estimateId, string versionId, string lineItemId, CancellationToken ct)
+    {
+        var estimate = await GetEstimateAsync(tenantId, estimateId, ct);
+        if (estimate is null) return false;
+
+        var id = LineItemDocId(estimateId, versionId, lineItemId);
+
+        try
+        {
+            await _container.DeleteItemAsync<EstimateLineItemDoc>(id, new PartitionKey(estimate.Pk), cancellationToken: ct);
+            return true;
+        }
+        catch (CosmosException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound)
+        {
+            return false;
+        }
+    }
 }
