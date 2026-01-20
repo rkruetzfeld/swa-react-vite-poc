@@ -1,0 +1,8 @@
+{
+  "routes": [
+    {
+      "route": "/api/*",
+      "rewrite": "https://pegportal-api-func-cc-001.azurewebsites.net/api/{*path}"
+    }
+  ]
+}
