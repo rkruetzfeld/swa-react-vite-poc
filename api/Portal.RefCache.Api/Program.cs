@@ -12,6 +12,8 @@ var host = new HostBuilder()
     .ConfigureFunctionsWorkerDefaults()
     .ConfigureServices(services =>
     {
+        services.AddHttpClient();
+
         // Prefer SWA env var name you already set (TABLES_CONNECTION),
         // fall back to local AzureWebJobsStorage for local emulator use.
         var connectionString =

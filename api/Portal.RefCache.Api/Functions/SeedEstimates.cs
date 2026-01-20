@@ -25,11 +25,11 @@ public sealed class SeedEstimates
     {
         var enabled = string.Equals(Environment.GetEnvironmentVariable("SEED_ENABLED"), "true", StringComparison.OrdinalIgnoreCase);
         if (!enabled)
-        {
-            var res = req.CreateResponse(HttpStatusCode.NotFound);
-            await res.WriteStringAsync("Not found.");
-            return res;
-        }
+{
+         var notFound = req.CreateResponse(HttpStatusCode.NotFound);
+         await notFound.WriteStringAsync("Not found.");
+        return notFound;
+}
 
         var auth = RequestAuth.TryGetAuthContext(req);
         if (auth is null) return await RequestAuth.Unauthorized(req);
