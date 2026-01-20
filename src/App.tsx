@@ -1,7 +1,7 @@
 // src/App.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, GridApi, RowClickedEvent, ValueParserParams } from "ag-grid-community";
+import type { ColDef, GridApi, RowDoubleClickedEvent, ValueParserParams } from "ag-grid-community";
 
 import "./components/StatusPill.css";
 import "./App.css";
@@ -576,6 +576,16 @@ export default function App() {
               <button className="primaryBtn" onClick={createEstimate} disabled={loadingHeaders || loadingItems}>
                 Create Estimate
               </button>
+              <button
+                className="ghostBtn"
+                onClick={async () => {
+                  if (!selectedEstimateId) return;
+                  await openEstimate(selectedEstimateId);
+                }}
+                disabled={!selectedEstimateId}
+              >
+                Edit
+              </button>
               <button className="ghostBtn" onClick={deleteSelectedEstimate} disabled={!selectedEstimateId}>
                 Delete Estimate
               </button>
@@ -783,9 +793,10 @@ export default function App() {
                     onGridSizeChanged={(e) => e.api.sizeColumnsToFit()}
                     onSelectionChanged={(e) => {
                       const sel = e.api.getSelectedRows?.()?.[0] as any;
-                      if (sel?.estimateId) setSelectedEstimateId(sel.estimateId);
+                      setSelectedEstimateId(sel?.estimateId ?? null);
                     }}
-                    onRowClicked={async (e: RowClickedEvent<EstimateHeader>) => {
+                    // Single-click selects. Double-click opens.
+                    onRowDoubleClicked={async (e: RowDoubleClickedEvent<EstimateHeader>) => {
                       const id = e.data?.estimateId;
                       if (id) await openEstimate(id);
                     }}
