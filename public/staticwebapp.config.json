@@ -1,0 +1,12 @@
+﻿{
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/assets/*", "/*.{css,js,png,jpg,jpeg,gif,svg,ico,woff,woff2,txt,map}"]
+  },
+  "routes": [
+    {
+      "route": "/api/*",
+      "rewrite": "https://pegportal-api-func-cc-001.azurewebsites.net/api/*"
+    }
+  ]
+}

@@ -12,6 +12,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
+    "postbuild": "node -e \"const fs=require('fs');fs.copyFileSync('public/staticwebapp.config.json','dist/staticwebapp.config.json');console.log('Copied staticwebapp.config.json to dist');\"",
     "generate:data": "node scripts/generate-sample-data.mjs"
   },
   "dependencies": {
