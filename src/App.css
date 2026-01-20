@@ -84,6 +84,30 @@
   padding: 12px;
 }
 
+/* Collapsed sidebar (more workspace) */
+.sidebar.sidebarCollapsed {
+  padding: 8px;
+}
+
+.sidebar.sidebarCollapsed .sectionTitle {
+  display: none;
+}
+
+.sidebar.sidebarCollapsed .navIndented {
+  margin-left: 0;
+  border-left: none;
+  padding-left: 0;
+}
+
+.sidebar.sidebarCollapsed .navBtn {
+  padding: 10px 8px;
+  text-align: center;
+}
+
+.sidebar.sidebarCollapsed .pinBtn {
+  display: none;
+}
+
 .sectionTitle {
   color: var(--muted);
   font-weight: 900;

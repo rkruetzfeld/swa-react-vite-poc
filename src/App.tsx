@@ -118,6 +118,8 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
   useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
 
+  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
+
   const [area, setArea] = useState<TopArea>("Forms");
   const [formsExpanded, setFormsExpanded] = useState(true);
   const [formsPage, setFormsPage] = useState<FormsPage>("Estimates");
@@ -158,9 +160,21 @@ export default function App() {
   const [toDate, setToDate] = useState(() => toIsoDateOnly(new Date()));
 
   const [selectedItemCode, setSelectedItemCode] = useState<string>("");
+  const [itemPickerText, setItemPickerText] = useState<string>("");
 
   const itemByCode = useMemo(() => new Map(items.map((i) => [i.costCode, i])), [items]);
   const itemCodes = useMemo(() => items.map((i) => i.costCode), [items]);
+
+  useEffect(() => {
+    // Keep the typeahead picker text aligned to the selected code
+    if (!selectedItemCode) {
+      setItemPickerText("");
+      return;
+    }
+    const it = itemByCode.get(selectedItemCode);
+    if (it) setItemPickerText(`${it.costCode} — ${it.description} (${it.uom})`);
+    else setItemPickerText(selectedItemCode);
+  }, [selectedItemCode, itemByCode]);
 
   const selectedHeader = useMemo(
     () => headers.find((h) => h.estimateId === selectedEstimateId) ?? null,
@@ -241,7 +255,10 @@ export default function App() {
         const it = await estimateDataService.getItemCatalog();
         if (cancelled) return;
         setItems(it);
-        setSelectedItemCode(it[0]?.costCode ?? "");
+        const firstCode = it[0]?.costCode ?? "";
+        setSelectedItemCode(firstCode);
+        const firstItem = it.find(x => x.costCode === firstCode);
+        setItemPickerText(firstItem ? `${firstItem.costCode} — ${firstItem.description} (${firstItem.uom})` : firstCode);
         setLoadingItems(false);
       } catch (e: any) {
         if (cancelled) return;
@@ -283,6 +300,27 @@ export default function App() {
     await ensureLinesLoaded(id);
   }
 
+  function syncLinesFromGrid() {
+    if (!selectedEstimateId) return;
+    const api = detailApiRef.current as any;
+    if (!api) return;
+
+    const rows: any[] = [];
+    api.forEachNode((n: any) => {
+      if (n?.data && n.data.lineId !== 'PINNED_TOTAL') rows.push(n.data);
+    });
+
+    setLinesByEstimate((prev) => {
+      const m = new Map(prev);
+      m.set(selectedEstimateId, rows as any);
+      return m;
+    });
+
+    // Touch lastUpdated so the list reflects changes
+    const now = new Date().toISOString();
+    setHeaders((prev) => prev.map((h) => (h.estimateId === selectedEstimateId ? { ...h, lastUpdated: now } : h)));
+  }
+
   function nextLineNo(): number {
     return currentLines.reduce((m, r) => Math.max(m, r.lineNo || 0), 0) + 1;
   }
@@ -319,19 +357,25 @@ export default function App() {
 
   function deleteSelectedLines() {
     if (!selectedEstimateId) return;
-    const api = detailApiRef.current;
+    const api = detailApiRef.current as any;
     if (!api) return;
 
-    const selected = api.getSelectedRows() as EstimateLine[];
-    if (!selected.length) return;
-    const ids = new Set(selected.map((r) => r.lineId));
+    const selected = (api.getSelectedRows?.() ?? []) as EstimateLine[];
+    const row = selected[0];
+    if (!row) return;
+
+    // Remove from grid immediately
+    api.applyTransaction?.({ remove: [row] });
 
     setLinesByEstimate((prev) => {
       const m = new Map(prev);
       const existing = m.get(selectedEstimateId) ?? [];
-      m.set(selectedEstimateId, existing.filter((r) => !ids.has(r.lineId)));
+      m.set(selectedEstimateId, existing.filter((r) => r.lineId !== row.lineId));
       return m;
     });
+
+    // keep React state consistent with grid edits
+    setTimeout(() => syncLinesFromGrid(), 0);
   }
 
   function createEstimate() {
@@ -389,6 +433,8 @@ export default function App() {
 
   function submitEstimate() {
     if (!selectedEstimateId) return;
+    // Ensure any in-grid edits are captured before status change
+    syncLinesFromGrid();
     updateEstimateStatus(selectedEstimateId, "Submitted");
     setView("EstimatesList");
   }
@@ -398,6 +444,25 @@ export default function App() {
     updateEstimateStatus(selectedEstimateId, "Draft");
     setView("EstimatesList");
   }
+
+  function deleteSelectedEstimate() {
+    if (!selectedEstimateId) return;
+    const header = headers.find((h) => h.estimateId === selectedEstimateId);
+    const label = header ? `${header.estimateId} — ${header.title}` : selectedEstimateId;
+    if (!window.confirm(`Delete estimate ${label}? This cannot be undone in the UI.`)) return;
+
+    setHeaders((prev) => prev.filter((h) => h.estimateId !== selectedEstimateId));
+    setLinesByEstimate((prev) => {
+      const m = new Map(prev);
+      m.delete(selectedEstimateId);
+      return m;
+    });
+
+    // clear selection + refresh list view
+    setSelectedEstimateId(null);
+    setView("EstimatesList");
+  }
+
 
   const filteredHeaders = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -482,7 +547,7 @@ export default function App() {
     ];
   }, [estimateTotal, itemCodes, itemByCode]);
 
-  const gridTemplateColumns = isDrawer ? "1fr" : "320px 1fr";
+  const gridTemplateColumns = isDrawer ? "1fr" : (sidebarCollapsed ? "72px 1fr" : "320px 1fr");
 
   return (
     <div className="appShell">
@@ -507,8 +572,19 @@ export default function App() {
 
         <div className="topRight">
           {area === "Forms" && view === "EstimatesList" && (
-            <button className="primaryBtn" onClick={createEstimate} disabled={loadingHeaders || loadingItems}>
-              Create Estimate
+            <>
+              <button className="primaryBtn" onClick={createEstimate} disabled={loadingHeaders || loadingItems}>
+                Create Estimate
+              </button>
+              <button className="ghostBtn" onClick={deleteSelectedEstimate} disabled={!selectedEstimateId}>
+                Delete Estimate
+              </button>
+            </>
+          )}
+
+          {!isDrawer && (
+            <button className="ghostBtn" onClick={() => setSidebarCollapsed((v) => !v)} title={sidebarCollapsed ? "Expand navigation" : "Collapse navigation"}>
+              {sidebarCollapsed ? "Expand" : "Collapse"}
             </button>
           )}
 
@@ -534,7 +610,7 @@ export default function App() {
 
       <div className="bodyGrid" style={{ gridTemplateColumns }}>
         {(!isDrawer || sidebarOpen) && (
-          <div className="sidebar">
+          <div className={sidebarCollapsed ? "sidebar sidebarCollapsed" : "sidebar"}>
             <div className="sectionTitle">Navigation</div>
 
             <button
@@ -544,7 +620,7 @@ export default function App() {
                 setFormsExpanded((v) => !v);
               }}
             >
-              Forms {formsExpanded ? "▾" : "▸"}
+              {sidebarCollapsed ? "🧾" : `Forms ${formsExpanded ? "▾" : "▸"}` }
             </button>
 
             {area === "Forms" && formsExpanded && (
@@ -556,7 +632,7 @@ export default function App() {
                     }`}
                     onClick={goEstimates}
                   >
-                    Estimates
+                    {sidebarCollapsed ? "🧾" : "Estimates"}
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Estimates")} title={pins.has("Forms:Estimates") ? "Unpin" : "Pin"}>
                     {pins.has("Forms:Estimates") ? "★" : "☆"}
@@ -565,7 +641,7 @@ export default function App() {
 
                 <div className="navRow">
                   <button className={`navBtn ${formsPage === "Forecast" && view === "Forecast" ? "navBtnActive" : ""}`} onClick={goForecast}>
-                    Forecast
+                    {sidebarCollapsed ? "📈" : "Forecast"}
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Forecast")} title={pins.has("Forms:Forecast") ? "Unpin" : "Pin"}>
                     {pins.has("Forms:Forecast") ? "★" : "☆"}
@@ -574,7 +650,7 @@ export default function App() {
 
                 <div className="navRow">
                   <button className={`navBtn ${formsPage === "API" && view === "ApiEstimates" ? "navBtnActive" : ""}`} onClick={goApi}>
-                    API Test
+                    {sidebarCollapsed ? "🧪" : "API Test"}
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:API")} title={pins.has("Forms:API") ? "Unpin" : "Pin"}>
                     {pins.has("Forms:API") ? "★" : "☆"}
@@ -583,7 +659,7 @@ export default function App() {
 
                 <div className="navRow">
                   <button className={`navBtn ${formsPage === "Smoke" && view === "SmokeTest" ? "navBtnActive" : ""}`} onClick={goSmoke}>
-                    Smoke Test
+                    {sidebarCollapsed ? "🔥" : "Smoke Test"}
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Smoke")} title={pins.has("Forms:Smoke") ? "Unpin" : "Pin"}>
                     {pins.has("Forms:Smoke") ? "★" : "☆"}
@@ -593,11 +669,11 @@ export default function App() {
             )}
 
             <button className={`navBtn ${area === "Reports" ? "navBtnActive" : ""}`} style={{ marginTop: 10 }} onClick={() => setArea("Reports")}>
-              Reports
+              {sidebarCollapsed ? "🗂️" : "Reports"}
             </button>
 
             <button className={`navBtn ${area === "Dashboards" ? "navBtnActive" : ""}`} style={{ marginTop: 10 }} onClick={() => setArea("Dashboards")}>
-              Dashboards
+              {sidebarCollapsed ? "📊" : "Dashboards"}
             </button>
 
             <div className="sectionTitle" style={{ marginTop: 18 }}>
@@ -608,22 +684,22 @@ export default function App() {
 
               {pins.has("Forms:Estimates") && (
                 <button className="navBtn" onClick={goEstimates}>
-                  Estimates
+                  {sidebarCollapsed ? "🧾" : "Estimates"}
                 </button>
               )}
               {pins.has("Forms:Forecast") && (
                 <button className="navBtn" onClick={goForecast}>
-                  Forecast
+                  {sidebarCollapsed ? "📈" : "Forecast"}
                 </button>
               )}
               {pins.has("Forms:API") && (
                 <button className="navBtn" onClick={goApi}>
-                  API Test
+                  {sidebarCollapsed ? "🧪" : "API Test"}
                 </button>
               )}
               {pins.has("Forms:Smoke") && (
                 <button className="navBtn" onClick={goSmoke}>
-                  Smoke Test
+                  {sidebarCollapsed ? "🔥" : "Smoke Test"}
                 </button>
               )}
             </div>
@@ -705,6 +781,10 @@ export default function App() {
                       setTimeout(() => e.api.sizeColumnsToFit(), 50);
                     }}
                     onGridSizeChanged={(e) => e.api.sizeColumnsToFit()}
+                    onSelectionChanged={(e) => {
+                      const sel = e.api.getSelectedRows?.()?.[0] as any;
+                      if (sel?.estimateId) setSelectedEstimateId(sel.estimateId);
+                    }}
                     onRowClicked={async (e: RowClickedEvent<EstimateHeader>) => {
                       const id = e.data?.estimateId;
                       if (id) await openEstimate(id);
@@ -753,13 +833,28 @@ export default function App() {
               {loadingLines && <div className="kicker" style={{ fontWeight: 950 }}>Loading estimate lines…</div>}
 
               <div className="toolbarGrid" style={{ gridTemplateColumns: vp.w <= 1024 ? "1fr" : "1fr 160px 170px" }}>
-                <select className="input" value={selectedItemCode} onChange={(e) => setSelectedItemCode(e.target.value)}>
-                  {items.map((it) => (
-                    <option key={it.costCode} value={it.costCode}>
-                      {it.costCode} — {it.description} ({it.uom})
-                    </option>
-                  ))}
-                </select>
+                <div style={{ position: 'relative' }}>
+                  <input
+                    className="input"
+                    value={itemPickerText}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setItemPickerText(v);
+                      // Try to extract cost code from the start of the string
+                      const code = v.split('—')[0].trim().toUpperCase();
+                      const hit = items.find((it) => it.costCode.toUpperCase() === code);
+                      if (hit) setSelectedItemCode(hit.costCode);
+                      else setSelectedItemCode('');
+                    }}
+                    list="item-catalog-dl"
+                    placeholder="Type item code or description…"
+                  />
+                  <datalist id="item-catalog-dl">
+                    {items.map((it) => (
+                      <option key={it.costCode} value={`${it.costCode} — ${it.description} (${it.uom})`} />
+                    ))}
+                  </datalist>
+                </div>
 
                 <button className="primaryBtn" onClick={addItemLine} disabled={!selectedItemCode}>
                   Add Item
@@ -777,8 +872,8 @@ export default function App() {
                     columnDefs={detailCols}
                     getRowId={(p) => p.data.lineId}
                     defaultColDef={{ resizable: true, sortable: true, filter: true, editable: true }}
-                    rowSelection="multiple"
-                    suppressRowClickSelection={true}
+                    rowSelection="single"
+                    suppressRowClickSelection={false}
                     pinnedBottomRowData={pinnedBottomRow}
                     pagination={true}
                     paginationPageSize={PAGE_SIZE}
@@ -788,6 +883,10 @@ export default function App() {
                     undoRedoCellEditing={true}
                     undoRedoCellEditingLimit={50}
                     enableRangeSelection={true}
+                    onCellValueChanged={() => {
+                      // Capture edits into React state so totals + list updates refresh
+                      syncLinesFromGrid();
+                    }}
                     onGridReady={(e) => {
                       detailApiRef.current = e.api;
                       setTimeout(() => e.api.sizeColumnsToFit(), 80);
