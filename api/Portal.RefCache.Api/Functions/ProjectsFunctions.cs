@@ -29,14 +29,17 @@ public sealed class ProjectsFunctions
         var container = _cosmos.GetDatabase(dbName).GetContainer(containerName);
 
         var q = new QueryDefinition(
-            "SELECT c.projectId, c.projectNumber, c.projectName, c.isActive, c.lastUpdateUtc, c.syncedUtc FROM c WHERE c.tenantId = @tenantId")
+            "SELECT c.projectId, c.projectNumber, c.projectName, c.isActive, c.lastUpdateUtc, c.syncedUtc " +
+            "FROM c WHERE c.tenantId = @tenantId")
             .WithParameter("@tenantId", tenantId);
 
-        var it = container.GetItemQueryIterator<ProjectRow>(q, requestOptions: new QueryRequestOptions
-        {
-            PartitionKey = new PartitionKey(tenantId),
-            MaxItemCount = 2000
-        });
+        var it = container.GetItemQueryIterator<ProjectRow>(
+            q,
+            requestOptions: new QueryRequestOptions
+            {
+                PartitionKey = new PartitionKey(tenantId),
+                MaxItemCount = 2000
+            });
 
         var rows = new List<ProjectRow>();
         while (it.HasMoreResults)
@@ -46,7 +49,13 @@ public sealed class ProjectsFunctions
         }
 
         var res = req.CreateResponse(HttpStatusCode.OK);
-        await res.WriteAsJsonAsync(rows, new JsonSerializerOptions(JsonSerializerDefaults.Web));
+        res.Headers.Add("Content-Type", "application/json; charset=utf-8");
+
+        var json = JsonSerializer.Serialize(
+            rows,
+            new JsonSerializerOptions(JsonSerializerDefaults.Web));
+
+        await res.WriteStringAsync(json);
         return res;
     }
 
