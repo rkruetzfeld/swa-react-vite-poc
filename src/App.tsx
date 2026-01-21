@@ -562,7 +562,9 @@ export default function App() {
               ? view === "Forecast"
                 ? "Forecast"
                 : view === "Projects"
+                ? "Projects"
                 : view === "Health"
+                ? "Health"
                 : view === "EstimateDetail"
                 ? `Estimate ${selectedHeader?.estimateId ?? ""}`
                 : "Estimates"
