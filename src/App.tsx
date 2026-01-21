@@ -558,17 +558,17 @@ export default function App() {
           <div className="brandMark" />
           <div>Portal</div>
           <div className="kicker" style={{ marginLeft: 10 }}>
-            {area === "Forms"
-              ? view === "Forecast"
-                ? "Forecast"
-                : view === "Projects"
-                ? "Projects"
-                : view === "Health"
-                ? "Health"
-                : view === "EstimateDetail"
-                ? `Estimate ${selectedHeader?.estimateId ?? ""}`
-                : "Estimates"
-              : area}
+	            {area === "Forms"
+	              ? view === "Forecast"
+	                ? "Forecast"
+	                : view === "Projects"
+	                  ? "Projects"
+	                  : view === "Health"
+	                    ? "Health"
+	                    : view === "EstimateDetail"
+	                      ? `Estimate ${selectedHeader?.estimateId ?? ""}`
+	                      : "Estimates"
+	              : area}
           </div>
         </div>
 
@@ -713,10 +713,6 @@ export default function App() {
                 <button className="navBtn" onClick={goProjects}>
                   {sidebarCollapsed ? "🏗️" : "Projects"}
                 </button>
-              )}
-              {false && (
-              )}
-              {false && (
               )}
             </div>
 
