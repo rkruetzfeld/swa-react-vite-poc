@@ -13,8 +13,8 @@ import { estimateDataService } from "./services/estimateDataService";
 import ForecastPage from "./pages/ForecastPage";
 import DashboardPage from "./pages/DashboardPage";
 import ReportsPage from "./pages/ReportsPage";
-import ApiEstimatesPage from "./pages/ApiEstimatesPage";
-import SmokeTestPage from "./pages/SmokeTestPage";
+import ProjectsPage from "./pages/ProjectsPage";
+import HealthPage from "./pages/HealthPage";
 import SignOutButton from "./auth/SignOutButton";
 
 // ✅ Shared component
@@ -25,8 +25,8 @@ const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
 // Shell navigation types
 type TopArea = "Forms" | "Reports" | "Dashboards";
-type FormsPage = "Estimates" | "Forecast" | "API" | "Smoke";
-type View = "EstimatesList" | "EstimateDetail" | "Forecast" | "ApiEstimates" | "SmokeTest";
+type FormsPage = "Estimates" | "Forecast" | "Projects";
+type View = "EstimatesList" | "EstimateDetail" | "Forecast" | "Projects" | "Health";
 
 type PinKey = `Forms:${FormsPage}`;
 
@@ -92,13 +92,16 @@ function statusToTone(v: Status): StatusTone {
 }
 
 function loadPins(): Set<PinKey> {
+  const allowed: PinKey[] = ["Forms:Estimates","Forms:Forecast","Forms:Projects"];
   try {
     const raw = localStorage.getItem("pinnedLinks");
-    if (!raw) return new Set();
+    if (!raw) return new Set(allowed);
     const arr = JSON.parse(raw) as string[];
-    return new Set(arr.filter((x) => typeof x === "string") as PinKey[]);
+    const filtered = arr.filter((x) => allowed.includes(x as PinKey)) as PinKey[];
+    // If user had nothing valid pinned, fall back to defaults
+    return new Set(filtered.length ? filtered : allowed);
   } catch {
-    return new Set();
+    return new Set(allowed);
   }
 }
 
@@ -222,19 +225,18 @@ export default function App() {
     if (isDrawer) setSidebarOpen(false);
   }
 
-  function goApi() {
+  function goProjects() {
     setArea("Forms");
     setFormsExpanded(true);
-    setFormsPage("API");
-    setView("ApiEstimates");
+    setFormsPage("Projects");
+    setView("Projects");
     if (isDrawer) setSidebarOpen(false);
   }
 
-  function goSmoke() {
-    setArea("Forms");
+  function goHealth() {
+    setArea("Dashboards");
     setFormsExpanded(true);
-    setFormsPage("Smoke");
-    setView("SmokeTest");
+    setView("Health");
     if (isDrawer) setSidebarOpen(false);
   }
 
@@ -559,10 +561,8 @@ export default function App() {
             {area === "Forms"
               ? view === "Forecast"
                 ? "Forecast"
-                : view === "ApiEstimates"
-                ? "API Test"
-                : view === "SmokeTest"
-                ? "Smoke Test"
+                : view === "Projects"
+                : view === "Health"
                 : view === "EstimateDetail"
                 ? `Estimate ${selectedHeader?.estimateId ?? ""}`
                 : "Estimates"
@@ -650,7 +650,10 @@ export default function App() {
                 </div>
 
                 <div className="navRow">
-                  <button className={`navBtn ${formsPage === "Forecast" && view === "Forecast" ? "navBtnActive" : ""}`} onClick={goForecast}>
+                  <button
+                    className={`navBtn ${formsPage === "Forecast" && view === "Forecast" ? "navBtnActive" : ""}`}
+                    onClick={goForecast}
+                  >
                     {sidebarCollapsed ? "📈" : "Forecast"}
                   </button>
                   <button className="pinBtn" onClick={() => togglePin("Forms:Forecast")} title={pins.has("Forms:Forecast") ? "Unpin" : "Pin"}>
@@ -659,20 +662,14 @@ export default function App() {
                 </div>
 
                 <div className="navRow">
-                  <button className={`navBtn ${formsPage === "API" && view === "ApiEstimates" ? "navBtnActive" : ""}`} onClick={goApi}>
-                    {sidebarCollapsed ? "🧪" : "API Test"}
+                  <button
+                    className={`navBtn ${formsPage === "Projects" && view === "Projects" ? "navBtnActive" : ""}`}
+                    onClick={goProjects}
+                  >
+                    {sidebarCollapsed ? "🏗️" : "Projects"}
                   </button>
-                  <button className="pinBtn" onClick={() => togglePin("Forms:API")} title={pins.has("Forms:API") ? "Unpin" : "Pin"}>
-                    {pins.has("Forms:API") ? "★" : "☆"}
-                  </button>
-                </div>
-
-                <div className="navRow">
-                  <button className={`navBtn ${formsPage === "Smoke" && view === "SmokeTest" ? "navBtnActive" : ""}`} onClick={goSmoke}>
-                    {sidebarCollapsed ? "🔥" : "Smoke Test"}
-                  </button>
-                  <button className="pinBtn" onClick={() => togglePin("Forms:Smoke")} title={pins.has("Forms:Smoke") ? "Unpin" : "Pin"}>
-                    {pins.has("Forms:Smoke") ? "★" : "☆"}
+                  <button className="pinBtn" onClick={() => togglePin("Forms:Projects")} title={pins.has("Forms:Projects") ? "Unpin" : "Pin"}>
+                    {pins.has("Forms:Projects") ? "★" : "☆"}
                   </button>
                 </div>
               </div>
@@ -686,11 +683,19 @@ export default function App() {
               {sidebarCollapsed ? "📊" : "Dashboards"}
             </button>
 
+            {area === "Dashboards" && (
+              <div className="navIndented" style={{ marginTop: 8 }}>
+                <button className={`navBtn ${view === "Health" ? "navBtnActive" : ""}`} onClick={goHealth}>
+                  {sidebarCollapsed ? "🩺" : "Health"}
+                </button>
+              </div>
+            )}
+
             <div className="sectionTitle" style={{ marginTop: 18 }}>
               Pinned
             </div>
             <div className="navIndented">
-              {pins.size === 0 && <div className="kicker">Pin Estimates/Forecast/API to keep them here.</div>}
+              {pins.size === 0 && <div className="kicker">Pin pages to keep them here.</div>}
 
               {pins.has("Forms:Estimates") && (
                 <button className="navBtn" onClick={goEstimates}>
@@ -702,15 +707,14 @@ export default function App() {
                   {sidebarCollapsed ? "📈" : "Forecast"}
                 </button>
               )}
-              {pins.has("Forms:API") && (
-                <button className="navBtn" onClick={goApi}>
-                  {sidebarCollapsed ? "🧪" : "API Test"}
+              {pins.has("Forms:Projects") && (
+                <button className="navBtn" onClick={goProjects}>
+                  {sidebarCollapsed ? "🏗️" : "Projects"}
                 </button>
               )}
-              {pins.has("Forms:Smoke") && (
-                <button className="navBtn" onClick={goSmoke}>
-                  {sidebarCollapsed ? "🔥" : "Smoke Test"}
-                </button>
+              {false && (
+              )}
+              {false && (
               )}
             </div>
 
@@ -735,7 +739,7 @@ export default function App() {
 
           {area === "Dashboards" && (
             <div className="panel" style={{ flex: 1, minHeight: 0 }}>
-              <DashboardPage />
+              {view === "Health" ? <HealthPage /> : <DashboardPage />}
             </div>
           )}
 
@@ -745,15 +749,9 @@ export default function App() {
             </div>
           )}
 
-          {area === "Forms" && view === "ApiEstimates" && (
+          {area === "Forms" && view === "Projects" && (
             <div className="panel" style={{ flex: 1, minHeight: 0 }}>
-              <ApiEstimatesPage />
-            </div>
-          )}
-
-          {area === "Forms" && view === "SmokeTest" && (
-            <div className="panel" style={{ flex: 1, minHeight: 0 }}>
-              <SmokeTestPage />
+              <ProjectsPage />
             </div>
           )}
 

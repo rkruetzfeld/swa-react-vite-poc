@@ -44,6 +44,24 @@ var host = new HostBuilder()
         // Add it as hosted service (framework will resolve the concrete type)
         services.AddHostedService(sp => sp.GetRequiredService<MultiTableInitializer>());
 
+        // PMWeb sources (via Logic App / API). Configure PMWEB_PROJECTS_URL to enable Projects sync.
+        services.AddSingleton<IPmwebProjectsSource, HttpPmwebProjectsSource>();
+
+        // Sync run metrics (prefer Cosmos when configured; otherwise in-memory no-op)
+        services.AddSingleton<ISyncRunsRepository>(sp =>
+        {
+            var cosmosConnection = Environment.GetEnvironmentVariable("COSMOS_CONNECTION");
+            if (!string.IsNullOrWhiteSpace(cosmosConnection))
+            {
+                var options = sp.GetService<CosmosOptions>();
+                var client = sp.GetService<CosmosClient>();
+                if (options is not null && client is not null)
+                    return new CosmosSyncRunsRepository(client, options);
+            }
+
+            return new InMemorySyncRunsRepository();
+        });
+
         // Repos (Estimates: prefer Cosmos when configured; fallback to Tables)
         services.AddSingleton<IEstimatesRepository>(sp =>
         {
@@ -64,11 +82,20 @@ var host = new HostBuilder()
 
         services.AddSingleton<IProjectsRepository>(sp =>
         {
+            var cosmosConnection = Environment.GetEnvironmentVariable("COSMOS_CONNECTION");
+            if (!string.IsNullOrWhiteSpace(cosmosConnection))
+            {
+                var options = sp.GetService<CosmosOptions>();
+                var client = sp.GetService<CosmosClient>();
+                if (options is not null && client is not null)
+                    return new CosmosProjectsRepository(client, options);
+            }
+
             var factory = sp.GetRequiredService<Func<string, TableClient>>();
             return new TableProjectsRepository(factory(TableNames.Projects));
         });
 
-        // Cosmos (core domain)
+// Cosmos (core domain)
         var cosmosConnection = Environment.GetEnvironmentVariable("COSMOS_CONNECTION");
         if (!string.IsNullOrWhiteSpace(cosmosConnection))
         {

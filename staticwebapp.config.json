@@ -2,7 +2,22 @@
   "routes": [
     {
       "route": "/api/*",
-      "rewrite": "https://pegportal-api-func-cc-001.azurewebsites.net/api/{*path}"
+      "statusCode": 404
     }
-  ]
+  ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": [
+      "/api/*",
+      "/assets/*",
+      "/*.css",
+      "/*.js",
+      "/*.ico",
+      "/*.png",
+      "/*.svg",
+      "/*.json",
+      "/*.txt",
+      "/*.map"
+    ]
+  }
 }
