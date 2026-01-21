@@ -2,6 +2,11 @@
 import { pca } from "../auth/pca";
 import { getAccessTokenOrRedirect } from "../auth/getAccessToken";
 
+// In Azure Static Web Apps, auth is typically handled by SWA itself (cookie/session).
+// MSAL is only needed if you are calling an API that requires an explicit Bearer token.
+// Default: off, to avoid MSAL silent-token timeouts in SWA deployments.
+const USE_MSAL = (import.meta.env.VITE_USE_MSAL ?? "false").toString().toLowerCase() === "true";
+
 export type ApiClientOptions = {
   baseUrl?: string;
 };
@@ -19,16 +24,20 @@ export async function apiGet<T>(path: string, opts?: ApiClientOptions): Promise<
   const baseUrl = getBaseUrl(opts?.baseUrl);
   const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 
-  console.log("apiGet URL:", url); // ← ADD THIS LINE
+  // console.log("apiGet URL:", url);
 
-  const token = await getAccessTokenOrRedirect(pca);
+  const headers: Record<string, string> = {
+    "Accept": "application/json",
+  };
+
+  if (USE_MSAL) {
+    const token = await getAccessTokenOrRedirect(pca);
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
   const res = await fetch(url, {
     method: "GET",
-    headers: {
-      "Accept": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
+    headers,
   });
 
 
@@ -44,15 +53,19 @@ export async function apiPost<T>(path: string, body?: unknown, opts?: ApiClientO
   const baseUrl = getBaseUrl(opts?.baseUrl);
   const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 
-  const token = await getAccessTokenOrRedirect(pca);
+  const headers: Record<string, string> = {
+    "Accept": "application/json",
+    "Content-Type": "application/json",
+  };
+
+  if (USE_MSAL) {
+    const token = await getAccessTokenOrRedirect(pca);
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
   const res = await fetch(url, {
     method: "POST",
-    headers: {
-      "Accept": "application/json",
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
   });
 
@@ -70,14 +83,18 @@ export async function apiDelete<T>(path: string, opts?: ApiClientOptions): Promi
   const baseUrl = getBaseUrl(opts?.baseUrl);
   const url = `${baseUrl}${path.startsWith("/") ? "" : "/"}${path}`;
 
-  const token = await getAccessTokenOrRedirect(pca);
+  const headers: Record<string, string> = {
+    "Accept": "application/json",
+  };
+
+  if (USE_MSAL) {
+    const token = await getAccessTokenOrRedirect(pca);
+    headers["Authorization"] = `Bearer ${token}`;
+  }
 
   const res = await fetch(url, {
     method: "DELETE",
-    headers: {
-      "Accept": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
+    headers,
   });
 
   if (!res.ok) {

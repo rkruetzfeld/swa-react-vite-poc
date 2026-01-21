@@ -98,6 +98,74 @@ public sealed class ProjectsSyncFunctions
             count, dbName, containerName, tenantId);
     }
 
+    /// <summary>
+    /// Shared sync logic used by timer trigger and on-demand HTTP trigger.
+    /// </summary>
+    public static async Task<int> SyncOnceAsync(CosmosClient cosmos, string syncUrl, string tenantId, ILogger log, CancellationToken ct = default)
+    {
+        var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB")
+            ?? Environment.GetEnvironmentVariable("COSMOS_DATABASE")
+            ?? "Ledger";
+
+        var containerName = Environment.GetEnvironmentVariable("PEG_COSMOS_PROJECTS_CONTAINER")
+            ?? Environment.GetEnvironmentVariable("COSMOS_CONTAINER")
+            ?? "Projects";
+
+        var container = cosmos.GetDatabase(dbName).GetContainer(containerName);
+
+        using var http = new HttpClient();
+
+        // If you later implement watermarking, pass sinceUtc here instead of null.
+        using var resp = await http.PostAsJsonAsync(syncUrl, new { sinceUtc = (string?)null, includeInactive = false }, ct);
+        resp.EnsureSuccessStatusCode();
+
+        var payload = await resp.Content.ReadFromJsonAsync<JsonElement>(cancellationToken: ct);
+        if (!payload.TryGetProperty("results", out var resultsEl) || resultsEl.ValueKind != JsonValueKind.Array)
+        {
+            log.LogError("Logic App response missing results[]. Payload: {Payload}", payload.ToString());
+            return 0;
+        }
+
+        var nowUtc = DateTime.UtcNow;
+        var count = 0;
+
+        foreach (var p in resultsEl.EnumerateArray())
+        {
+            ct.ThrowIfCancellationRequested();
+
+            var projectId = p.GetProperty("Id").GetInt32();
+            var projectNumber = p.TryGetProperty("ProjectNumber", out var pn) && pn.ValueKind != JsonValueKind.Null ? pn.GetString() : null;
+            var projectName = p.TryGetProperty("ProjectName", out var pnm) && pnm.ValueKind != JsonValueKind.Null ? pnm.GetString() : null;
+            var isActive = p.TryGetProperty("IsActive", out var ia) && ia.ValueKind != JsonValueKind.Null && ia.GetBoolean();
+
+            string? lastUpdateUtc = null;
+            if (p.TryGetProperty("LastUpdateDate", out var lud) && lud.ValueKind != JsonValueKind.Null)
+                lastUpdateUtc = lud.GetString();
+
+            var doc = new ProjectDoc
+            {
+                Id = $"pmweb-{projectId}",
+                TenantId = tenantId,
+                ProjectId = projectId,
+                ProjectNumber = projectNumber,
+                ProjectName = projectName,
+                IsActive = isActive,
+                LastUpdateUtc = lastUpdateUtc,
+                Source = "PMWeb",
+                SyncedUtc = nowUtc
+            };
+
+            await container.UpsertItemAsync(doc, new PartitionKey(tenantId), cancellationToken: ct);
+            count++;
+        }
+
+        log.LogInformation(
+            "Projects sync complete. Upserted {Count} projects into {Db}/{Container} for tenant {TenantId}.",
+            count, dbName, containerName, tenantId);
+
+        return count;
+    }
+
     private sealed class ProjectDoc
     {
         public string Id { get; set; } = default!;

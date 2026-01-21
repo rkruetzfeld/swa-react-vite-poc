@@ -22,9 +22,17 @@ public sealed class ProjectsFunctions
     public async Task<HttpResponseData> GetProjects(
         [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "projects")] HttpRequestData req)
     {
-        var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB") ?? "Portal";
-        var containerName = Environment.GetEnvironmentVariable("PEG_COSMOS_PROJECTS_CONTAINER") ?? "Projects";
-        var tenantId = Environment.GetEnvironmentVariable("PEG_TENANT_ID") ?? "default";
+        // Prefer the newer PEG_* names, but fall back to the earlier COSMOS_* names
+        // used elsewhere in the repo.
+        var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB")
+            ?? Environment.GetEnvironmentVariable("COSMOS_DATABASE")
+            ?? "Ledger";
+        var containerName = Environment.GetEnvironmentVariable("PEG_COSMOS_PROJECTS_CONTAINER")
+            ?? Environment.GetEnvironmentVariable("COSMOS_CONTAINER")
+            ?? "Projects";
+        var tenantId = Environment.GetEnvironmentVariable("PEG_TENANT_ID")
+            ?? Environment.GetEnvironmentVariable("TENANT_ID")
+            ?? "default";
 
         var container = _cosmos.GetDatabase(dbName).GetContainer(containerName);
 
@@ -48,14 +56,20 @@ public sealed class ProjectsFunctions
                 rows.Add(row);
         }
 
+        // Shape the response for the UI (AG Grid)
+        var shaped = rows.Select(r => new
+        {
+            projectId = r.ProjectId,
+            name = r.ProjectName,
+            updatedUtc = r.LastUpdateUtc,
+            projectNumber = r.ProjectNumber,
+            isActive = r.IsActive,
+            syncedUtc = r.SyncedUtc
+        });
+
         var res = req.CreateResponse(HttpStatusCode.OK);
         res.Headers.Add("Content-Type", "application/json; charset=utf-8");
-
-        var json = JsonSerializer.Serialize(
-            rows,
-            new JsonSerializerOptions(JsonSerializerDefaults.Web));
-
-        await res.WriteStringAsync(json);
+        await res.WriteStringAsync(JsonSerializer.Serialize(shaped, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
         return res;
     }
 
