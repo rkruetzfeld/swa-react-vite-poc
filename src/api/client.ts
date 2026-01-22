@@ -60,7 +60,7 @@ async function apiFetch(path: string, init?: RequestInit, opts?: ApiClientOption
   };
 
   // IMPORTANT for external Function App calls:
-  // - do NOT send SWA cookies cross-origin (causes CORS credential rules to bite)
+  // - do NOT send SWA cookies! cross-origin (causes CORS credential rules to bite)
   // - use bearer tokens instead (above)
   const res = await fetch(url, {
     ...init,
