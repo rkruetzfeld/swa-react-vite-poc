@@ -3,6 +3,11 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import { apiGet } from "../api/client";
 
+// IMPORTANT:
+// This should be the Function App HOST (no /api prefix unless your Functions use it).
+// Example: https://pegportal-api-func-cc-001.azurewebsites.net
+const API_HOST = (import.meta.env.VITE_API_BASE_URL ?? "").toString().replace(/\/+$/, "");
+
 type ProjectDto = {
   projectId: string;
   name: string;
@@ -22,6 +27,13 @@ type HealthResponse = {
   } | null;
 };
 
+type SqlPingResponse = {
+  ok?: boolean;
+  elapsedMs?: number;
+  traceId?: string;
+  payload?: string;
+};
+
 export default function ProjectsPage() {
   const [rows, setRows] = useState<ProjectDto[]>([]);
   const [busy, setBusy] = useState(false);
@@ -39,50 +51,22 @@ export default function ProjectsPage() {
     []
   );
 
-async function refresh() {
-  setBusy(true);
-  setError("");
-  try {
-    const data = await apiGet<ProjectDto[]>("/projects");
-    setRows(Array.isArray(data) ? data : []);
-
-    // optional health
-    try {
-      const h = await apiGet<HealthResponse>("/health/projects");
-      setHealth(h ?? null);
-    } catch {
-      setHealth(null);
-    }
-  } catch (e: any) {
-    setError(e?.message ?? String(e));
-  } finally {
-    setBusy(false);
-  }
-}
-
-async function pingApi() {
-  setBusy(true);
-  setError("");
-  try {
-    // your function supports GET (you just confirmed)
-    await apiGet("/diag/sql-ping");
-  } catch (e: any) {
-    setError(e?.message ?? String(e));
-  } finally {
-    setBusy(false);
-  }
-}
-
-
-  // This is a simple backend connectivity check (GET /diag/sql-ping)
-  // It is NOT a sync. We'll add a real "sync/projects" endpoint later.
-  async function pingApi() {
+  async function refresh() {
     setBusy(true);
     setError("");
-    setPingResult("");
     try {
-      const result = await apiGet<any>("/diag/sql-ping");
-      setPingResult(`Ping OK: ${JSON.stringify(result)}`);
+      if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
+
+      const data = await apiGet<ProjectDto[]>("/projects", { baseUrl: API_HOST });
+      setRows(Array.isArray(data) ? data : []);
+
+      // optional health (don't break UI if it errors)
+      try {
+        const h = await apiGet<HealthResponse>("/health/projects", { baseUrl: API_HOST });
+        setHealth(h ?? null);
+      } catch {
+        setHealth(null);
+      }
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -90,7 +74,27 @@ async function pingApi() {
     }
   }
 
+  async function pingSql() {
+    setBusy(true);
+    setError("");
+    try {
+      if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
+
+      const result = await apiGet<SqlPingResponse>("/diag/sql-ping", { baseUrl: API_HOST });
+
+      const elapsed = result?.elapsedMs ?? "?";
+      const trace = result?.traceId ? ` • traceId=${result.traceId}` : "";
+      setPingResult(`Ping OK • elapsedMs=${elapsed}${trace} • ${new Date().toISOString()}`);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setPingResult("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
+    // Optional: comment this out while you're focused only on sql-ping
     refresh();
   }, []);
 
@@ -103,6 +107,8 @@ async function pingApi() {
             Synced Projects from PMWeb into storage. Joins to Estimates will be by <code>projectId</code>.
           </div>
 
+          {pingResult && <div className="kicker" style={{ marginTop: 6 }}>{pingResult}</div>}
+
           {health?.latest && (
             <div className="kicker" style={{ marginTop: 6 }}>
               Last sync: {health.latest.succeeded ? "✅" : "❌"}{" "}
@@ -111,8 +117,6 @@ async function pingApi() {
               {health.latest.error ? ` • ${health.latest.error}` : ""}
             </div>
           )}
-
-          {pingResult && <div className="kicker" style={{ marginTop: 6 }}>{pingResult}</div>}
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -126,8 +130,8 @@ async function pingApi() {
           <button className="btn" onClick={refresh} disabled={busy}>
             Load Projects
           </button>
-          <button className="btn" onClick={pingApi} disabled={busy}>
-            Ping API
+          <button className="btn" onClick={pingSql} disabled={busy}>
+            Ping SQL
           </button>
         </div>
       </div>
