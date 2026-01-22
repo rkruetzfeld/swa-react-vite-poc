@@ -112,8 +112,20 @@ export async function apiPost<T>(path: string, body?: unknown, opts?: ApiClientO
   return await readJsonOrThrow<T>(res);
 }
 
-export async function apiDelete<T>(path: string, opts?: ApiClientOptions): Promise<T> {
+export async function apiDelete<T>(
+  path: string,
+  opts?: ApiClientOptions
+): Promise<T> {
   const res = await apiFetch(path, { method: "DELETE" }, opts);
-  if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    throw new Error(`DELETE ${path} failed: ${res.status} ${res.statusText}`);
+  }
   return await readJsonOrThrow<T>(res);
+}
+
+
+export async function apiGetText(path: string, opts?: ApiClientOptions): Promise<string> {
+  const res = await apiFetch(path, { method: "GET" }, opts);
+  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`);
+  return await res.text();
 }
