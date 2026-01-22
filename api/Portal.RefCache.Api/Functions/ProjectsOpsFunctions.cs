@@ -74,7 +74,7 @@ public sealed class ProjectsOpsFunctions
 
     [Function("ProjectsHealth")]
     public async Task<HttpResponseData> ProjectsHealth(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "health/projects")] HttpRequestData req,
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "health/sync-runs/projects")] HttpRequestData req,
         FunctionContext ctx)
     {
         var traceId = ctx.InvocationId;
