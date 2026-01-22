@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
-import { apiGet, apiPost } from "../api/client";
+import { apiGet } from "../api/client";
 
 type ProjectDto = {
   projectId: string;
@@ -28,6 +28,7 @@ export default function ProjectsPage() {
   const [error, setError] = useState<string>("");
   const [quickFilter, setQuickFilter] = useState("");
   const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [pingResult, setPingResult] = useState<string>("");
 
   const colDefs = useMemo<ColDef<ProjectDto>[]>(
     () => [
@@ -41,13 +42,18 @@ export default function ProjectsPage() {
   async function refresh() {
     setBusy(true);
     setError("");
+    setPingResult("");
     try {
-      // ✅ RELATIVE PATHS ONLY
       const data = await apiGet<ProjectDto[]>("/projects");
-      setRows(data ?? []);
+      setRows(Array.isArray(data) ? data : []);
 
-      const h = await apiGet<HealthResponse>("health/projects");
-      setHealth(h ?? null);
+      // Health is optional: don't break the page if backend doesn't have it yet
+      try {
+        const h = await apiGet<HealthResponse>("/health/projects");
+        setHealth(h ?? null);
+      } catch {
+        setHealth(null);
+      }
     } catch (e: any) {
       setError(e?.message ?? String(e));
     } finally {
@@ -55,20 +61,21 @@ export default function ProjectsPage() {
     }
   }
 
-async function runSyncNow() {
-  setBusy(true);
-  setError("");
-
-  try {
-    const result = await apiGet("/diag/sql-ping", { baseUrl: import.meta.env.VITE_API_BASE_URL }); // POST exists per your function bindings
-    setLog((prev) => prev + `\nPing OK: ${JSON.stringify(result)}`);
-  } catch (e: any) {
-    setError(e?.message ?? String(e));
-  } finally {
-    setBusy(false);
+  // This is a simple backend connectivity check (GET /diag/sql-ping)
+  // It is NOT a sync. We'll add a real "sync/projects" endpoint later.
+  async function pingApi() {
+    setBusy(true);
+    setError("");
+    setPingResult("");
+    try {
+      const result = await apiGet<any>("/diag/sql-ping");
+      setPingResult(`Ping OK: ${JSON.stringify(result)}`);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setBusy(false);
+    }
   }
-}
-
 
   useEffect(() => {
     refresh();
@@ -86,11 +93,13 @@ async function runSyncNow() {
           {health?.latest && (
             <div className="kicker" style={{ marginTop: 6 }}>
               Last sync: {health.latest.succeeded ? "✅" : "❌"}{" "}
-              {new Date(health.latest.startedUtc).toISOString()} •{" "}
-              {health.latest.durationMs} ms • {health.latest.recordCount} projects
+              {new Date(health.latest.startedUtc).toISOString()} • {health.latest.durationMs} ms •{" "}
+              {health.latest.recordCount} projects
               {health.latest.error ? ` • ${health.latest.error}` : ""}
             </div>
           )}
+
+          {pingResult && <div className="kicker" style={{ marginTop: 6 }}>{pingResult}</div>}
         </div>
 
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -102,9 +111,9 @@ async function runSyncNow() {
             style={{ width: 220 }}
           />
           <button className="btn" onClick={refresh} disabled={busy}>
-            Refresh
+            Load Projects
           </button>
-          <button className="btn" onClick={runSyncNow} disabled={busy}>
+          <button className="btn" onClick={pingApi} disabled={busy}>
             Ping API
           </button>
         </div>
@@ -134,7 +143,3 @@ async function runSyncNow() {
     </div>
   );
 }
-function setLog(arg0: (prev: any) => string) {
-  throw new Error("Function not implemented.");
-}
-
