@@ -10,8 +10,7 @@ import { tokenRequest } from "./msalConfig";
  * Silent first; if interaction is required, redirects.
  */
 export async function getAccessTokenOrRedirect(
-  pca: IPublicClientApplication
-): Promise<string> {
+pca: IPublicClientApplication, scope: string): Promise<string> {
   const active = pca.getActiveAccount();
   const accounts = pca.getAllAccounts();
   const account: AccountInfo | undefined = active ?? accounts[0];
