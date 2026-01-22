@@ -2,134 +2,111 @@
 import { pca } from "../auth/pca";
 import { getAccessTokenOrRedirect } from "../auth/getAccessToken";
 
-// Default: off (SWA cookie/session auth usually enough)
-const USE_MSAL =
-  (import.meta.env.VITE_USE_MSAL ?? "false").toString().toLowerCase() === "true";
+// When calling an external Function App, SWA cookies do NOT apply.
+// Use MSAL bearer tokens when VITE_USE_MSAL=true (recommended for external APIs).
+const USE_MSAL = (import.meta.env.VITE_USE_MSAL ?? "false").toString().toLowerCase() === "true";
 
 export type ApiClientOptions = {
   baseUrl?: string;
 };
 
-function normalizeBase(u: string): string {
-  return u.trim().replace(/\/+$/, ""); // remove trailing slash(es)
+function normalizeBaseUrl(baseUrl: string) {
+  // allow "/api" or "https://host/api"
+  return baseUrl.replace(/\/+$/, "");
 }
 
-function getBaseUrl(explicit?: string) {
-  const fromEnv = (import.meta.env.VITE_API_BASE_URL as string | undefined) ?? "";
-  const base = (explicit || fromEnv || "").trim();
-
-  // Default: same-origin SWA managed API (ONLY works if you actually deployed a SWA API)
-  if (!base) return "/api";
-
-  // Allow either "/api" or full "https://host/api"
-  return normalizeBase(base);
+function joinUrl(baseUrl: string, path: string) {
+  const b = normalizeBaseUrl(baseUrl);
+  const p = path.startsWith("/") ? path : `/${path}`;
+  return `${b}${p}`;
 }
 
-/**
- * Joins baseUrl + path, and prevents common "/api/api/..." mistakes.
- * Examples:
- *  base="/api", path="projects"                  => "/api/projects"
- *  base="/api", path="/api/projects"             => "/api/projects"
- *  base="https://x.net/api", path="projects"     => "https://x.net/api/projects"
- *  base="https://x.net/api", path="/api/projects"=> "https://x.net/api/projects"
- */
-function joinUrl(baseUrl: string, path: string): string {
-  const base = normalizeBase(baseUrl);
-  let p = (path || "").trim();
+function isHtmlResponse(res: Response) {
+  const ct = res.headers.get("content-type") ?? "";
+  return ct.includes("text/html");
+}
 
-  // Always ensure a single leading slash
-  if (!p.startsWith("/")) p = `/${p}`;
+function looksLikeLoginRedirectHtml(bodyStart: string) {
+  const s = bodyStart.toLowerCase();
+  return s.includes("<!doctype html") || s.includes("<html");
+}
 
-  // If caller passes "/api/..." AND base already ends with "/api", drop the duplicate segment.
-  const baseEndsWithApi = /\/api$/i.test(base);
-  if (baseEndsWithApi && /^\/api(\/|$)/i.test(p)) {
-    p = p.replace(/^\/api/i, "");
-    if (!p.startsWith("/")) p = `/${p}`;
+async function buildAuthHeaders(url: string): Promise<Record<string, string>> {
+  // Only attach bearer tokens if:
+  // - explicitly enabled AND
+  // - we have a scope configured
+  // This avoids breaking SWA-managed same-origin calls.
+  const scope = (import.meta.env.VITE_AAD_API_SCOPE ?? "").toString().trim();
+  if (!USE_MSAL || !scope) return {};
+
+  // Acquire token (interactive redirect if needed)
+  const token = await getAccessTokenOrRedirect(pca, scope);
+  if (!token) return {};
+
+  return { Authorization: `Bearer ${token}` };
+}
+
+async function apiFetch(path: string, init?: RequestInit, opts?: ApiClientOptions) {
+  const baseUrl = (opts?.baseUrl ?? (import.meta.env.VITE_API_BASE_URL as string) ?? "/api").toString();
+  const url = joinUrl(baseUrl, path);
+
+  const authHeaders = await buildAuthHeaders(url);
+
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+    ...(init?.headers as Record<string, string>),
+    ...authHeaders,
+  };
+
+  // IMPORTANT for external Function App calls:
+  // - do NOT send SWA cookies cross-origin (causes CORS credential rules to bite)
+  // - use bearer tokens instead (above)
+  const res = await fetch(url, {
+    ...init,
+    headers,
+    credentials: "omit",
+  });
+
+  // If EasyAuth is redirecting to an HTML login page, you'll see HTML here.
+  if (isHtmlResponse(res)) {
+    const text = await res.text();
+    const first120 = text.slice(0, 120).replace(/\s+/g, " ");
+    const hint = looksLikeLoginRedirectHtml(first120)
+      ? `Expected JSON but got HTML from ${url}. This usually means the Function App auth is redirecting you to login (302 -> HTML) or the route is wrong. First 120 chars: ${first120}`
+      : `Expected JSON but got non-JSON response from ${url}. First 120 chars: ${first120}`;
+    throw new Error(hint);
   }
 
-  return `${base}${p}`;
+  return res;
 }
 
-async function buildHeaders(withJsonBody: boolean): Promise<Record<string, string>> {
-  const headers: Record<string, string> = { Accept: "application/json" };
-  if (withJsonBody) headers["Content-Type"] = "application/json";
-
-  if (USE_MSAL) {
-    const token = await getAccessTokenOrRedirect(pca);
-    headers["Authorization"] = `Bearer ${token}`;
+async function readJsonOrThrow<T>(res: Response) {
+  const text = await res.text();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    const first120 = text.slice(0, 120).replace(/\s+/g, " ");
+    throw new Error(`Expected JSON but got: ${first120}`);
   }
-  return headers;
 }
 
-async function readJsonOrThrow<T>(res: Response, url: string): Promise<T> {
-  const contentType = (res.headers.get("content-type") || "").toLowerCase();
-
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status} ${res.statusText} from ${url}: ${text}`);
-  }
-
-  // Empty response
-  if (res.status === 204) return {} as T;
-
-  // If we got HTML, it usually means: route not found, auth redirected, or wrong base URL.
-  if (contentType.includes("text/html")) {
-    const text = await res.text().catch(() => "");
-    const head = text.slice(0, 160).replace(/\s+/g, " ");
-    throw new Error(
-      `Expected JSON but got HTML from ${url}. ` +
-        `This usually means one of: ` +
-        `- the API route does not exist (frontend served index.html), ` +
-        `- auth redirected you to an HTML login page, ` +
-        `- or the backend is not linked/routing for this path. ` +
-        `First 160 chars: ${head}`
-    );
-  }
-
-  const txt = await res.text();
-  return (txt ? (JSON.parse(txt) as T) : ({} as T));
-}
-
+// Convenience wrappers
 export async function apiGet<T>(path: string, opts?: ApiClientOptions): Promise<T> {
-  const baseUrl = getBaseUrl(opts?.baseUrl);
-  const url = joinUrl(baseUrl, path);
-
-  const res = await fetch(url, {
-    method: "GET",
-    headers: await buildHeaders(false),
-    credentials: "include",
-  });
-
-  return readJsonOrThrow<T>(res, url);
+  const res = await apiFetch(path, { method: "GET" }, opts);
+  if (!res.ok) throw new Error(`GET ${path} failed: ${res.status} ${res.statusText}`);
+  return await readJsonOrThrow<T>(res);
 }
 
-export async function apiPost<T>(
-  path: string,
-  body?: any,
-  opts?: ApiClientOptions
-): Promise<T> {
-  const baseUrl = getBaseUrl(opts?.baseUrl);
-  const url = joinUrl(baseUrl, path);
-
-  const res = await fetch(url, {
-    method: "POST",
-    headers: await buildHeaders(true),
-    body: body === undefined ? undefined : JSON.stringify(body),
-    credentials: "include",
-  });
-
-  return readJsonOrThrow<T>(res, url);
-}
-
-export async function apiDelete<T>(path: string, opts?: ApiClientOptions): Promise<T> {
-  const baseUrl = getBaseUrl(opts?.baseUrl);
-  const url = joinUrl(baseUrl, path);
-
-  const res = await fetch(url, {
-    method: "DELETE",
-    headers: await buildHeaders(false),
-    credentials: "include",
-  });
-
-  return readJsonOrThrow<T>(res, url);
+export async function apiPost<T>(path: string, body?: unknown, opts?: ApiClientOptions): Promise<T> {
+  const res = await apiFetch(
+    path,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    opts
+  );
+  if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);
+  return await readJsonOrThrow<T>(res);
 }
