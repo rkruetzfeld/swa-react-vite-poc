@@ -21,7 +21,8 @@ public sealed class ProjectsOpsFunctions
 
     [Function("SyncProjectsNow")]
     public async Task<HttpResponseData> SyncProjectsNow(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "post", Route = "sync/projects")] HttpRequestData req,
+        // ✅ Allow GET + POST so /api/sync/projects doesn’t return HTML 405 pages when browsed directly
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", "post", Route = "sync/projects")] HttpRequestData req,
         FunctionContext ctx)
     {
         var sw = Stopwatch.StartNew();
