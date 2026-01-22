@@ -4,7 +4,8 @@ import { getAccessTokenOrRedirect } from "../auth/getAccessToken";
 
 // When calling an external Function App, SWA cookies do NOT apply.
 // Use MSAL bearer tokens when VITE_USE_MSAL=true (recommended for external APIs).
-const USE_MSAL = (import.meta.env.VITE_USE_MSAL ?? "false").toString().toLowerCase() === "true";
+const USE_MSAL =
+  (import.meta.env.VITE_USE_MSAL ?? "false").toString().toLowerCase() === "true";
 
 export type ApiClientOptions = {
   baseUrl?: string;
@@ -108,5 +109,11 @@ export async function apiPost<T>(path: string, body?: unknown, opts?: ApiClientO
     opts
   );
   if (!res.ok) throw new Error(`POST ${path} failed: ${res.status} ${res.statusText}`);
+  return await readJsonOrThrow<T>(res);
+}
+
+export async function apiDelete<T>(path: string, opts?: ApiClientOptions): Promise<T> {
+  const res = await apiFetch(path, { method: "DELETE" }, opts);
+  if (!res.ok) throw new Error(`DELETE ${path} failed: ${res.status} ${res.statusText}`);
   return await readJsonOrThrow<T>(res);
 }
