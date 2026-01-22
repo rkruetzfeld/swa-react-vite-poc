@@ -19,6 +19,10 @@ import EstimatesPage from "./pages/EstimatesPage"; // ✅ wire back in
 import SignOutButton from "./auth/SignOutButton";
 import StatusPill, { type StatusTone } from "./components/StatusPill";
 
+
+// Function App host (no /api). Used for display only.
+const API_HOST = (import.meta.env.VITE_API_BASE_URL ?? "").toString().replace(/\/+$/, "");
+
 const PAGE_SIZE = 20;
 const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
 
@@ -189,5 +193,88 @@ export default function App() {
     }
   }
 
-  return <div className="app-shell">{renderMain()}</div>;
+  return (
+    <div className="appShell">
+      <div className="topBar">
+        <div className="brand">
+          <span className="brandMark" />
+          PEG Portal (PoC)
+          <span className="kicker">API: {API_HOST || "not set"}</span>
+        </div>
+
+        <div className="topRight">
+          <button
+            className="ghostBtn"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            title="Collapse/expand the left navigation"
+          >
+            {sidebarCollapsed ? "Expand Nav" : "Collapse Nav"}
+          </button>
+
+          {isDrawer && (
+            <button
+              className="ghostBtn"
+              onClick={() => setSidebarOpen((v) => !v)}
+              title="Open/close the left navigation"
+            >
+              {sidebarOpen ? "Hide Nav" : "Show Nav"}
+            </button>
+          )}
+
+          <button className="ghostBtn" onClick={() => setView("Health")}>
+            Health
+          </button>
+          <SignOutButton />
+        </div>
+      </div>
+
+      <div className="bodyGrid" style={{ gridTemplateColumns: sidebarOpen ? (sidebarCollapsed ? "64px 1fr" : "260px 1fr") : "1fr" }}>
+        {sidebarOpen && (
+          <div className={`sidebar ${sidebarCollapsed ? "sidebarCollapsed" : ""}`}>
+            <div className="sectionTitle">Forms</div>
+
+            <button
+              className="navBtn"
+              onClick={() => {
+                setArea("Forms");
+                setFormsPage("Projects");
+                setView("Projects");
+              }}
+            >
+              Projects
+            </button>
+
+            <button
+              className="navBtn"
+              onClick={() => {
+                setArea("Forms");
+                setFormsPage("Estimates");
+                setView("EstimatesList");
+              }}
+            >
+              Estimates
+            </button>
+
+            <button
+              className="navBtn"
+              onClick={() => {
+                setArea("Forms");
+                setFormsPage("Forecast");
+                setView("Forecast");
+              }}
+            >
+              Forecast
+            </button>
+
+            <div className="sectionTitle">Ops</div>
+            <button className="navBtn" onClick={() => setView("Health")}>
+              Health & Diagnostics
+            </button>
+          </div>
+        )}
+
+        <div className="main">{renderMain()}</div>
+      </div>
+    </div>
+  );
 }

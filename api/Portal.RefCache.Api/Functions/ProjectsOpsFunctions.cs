@@ -125,4 +125,89 @@ public sealed class ProjectsOpsFunctions
         });
         return res;
     }
+
+
+    [Function("ProjectsHealthUi")]
+    public async Task<HttpResponseData> ProjectsHealthUi(
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "health/projects")] HttpRequestData req,
+        FunctionContext ctx)
+    {
+        // Back-compat for the UI which calls /health/projects
+        // Shape matches the UI's HealthResponse type.
+        var traceId = ctx.InvocationId;
+
+        var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB")
+            ?? Environment.GetEnvironmentVariable("COSMOS_DATABASE")
+            ?? "Ledger";
+        var containerName = Environment.GetEnvironmentVariable("PEG_COSMOS_PROJECTS_CONTAINER")
+            ?? Environment.GetEnvironmentVariable("COSMOS_CONTAINER")
+            ?? "Projects";
+        var tenantId = Environment.GetEnvironmentVariable("PEG_TENANT_ID")
+            ?? Environment.GetEnvironmentVariable("TENANT_ID")
+            ?? "default";
+
+        try
+        {
+            var container = _cosmos.GetDatabase(dbName).GetContainer(containerName);
+
+            var qCount = new QueryDefinition("SELECT VALUE COUNT(1) FROM c WHERE c.tenantId = @tenantId")
+                .WithParameter("@tenantId", tenantId);
+            var qMax = new QueryDefinition("SELECT VALUE MAX(c.syncedUtc) FROM c WHERE c.tenantId = @tenantId")
+                .WithParameter("@tenantId", tenantId);
+
+            var countIt = container.GetItemQueryIterator<int>(qCount, requestOptions: new QueryRequestOptions
+            {
+                PartitionKey = new PartitionKey(tenantId)
+            });
+            var maxIt = container.GetItemQueryIterator<DateTime?>(qMax, requestOptions: new QueryRequestOptions
+            {
+                PartitionKey = new PartitionKey(tenantId)
+            });
+
+            int total = 0;
+            DateTime? lastSyncedUtc = null;
+
+            if (countIt.HasMoreResults)
+                total = (await countIt.ReadNextAsync()).Resource.FirstOrDefault();
+            if (maxIt.HasMoreResults)
+                lastSyncedUtc = (await maxIt.ReadNextAsync()).Resource.FirstOrDefault();
+
+            var res = req.CreateResponse(HttpStatusCode.OK);
+            await res.WriteAsJsonAsync(new
+            {
+                entity = "projects",
+                latest = new
+                {
+                    runId = traceId,
+                    startedUtc = lastSyncedUtc?.ToString("o") ?? "",
+                    endedUtc = lastSyncedUtc?.ToString("o") ?? "",
+                    durationMs = 0,
+                    recordCount = total,
+                    succeeded = true,
+                    error = (string?)null
+                }
+            });
+            return res;
+        }
+        catch (Exception ex)
+        {
+            var bad = req.CreateResponse(HttpStatusCode.OK);
+            await bad.WriteAsJsonAsync(new
+            {
+                entity = "projects",
+                latest = new
+                {
+                    runId = traceId,
+                    startedUtc = "",
+                    endedUtc = "",
+                    durationMs = 0,
+                    recordCount = 0,
+                    succeeded = false,
+                    error = ex.Message
+                }
+            });
+            return bad;
+        }
+    }
+
 }

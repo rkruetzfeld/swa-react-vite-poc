@@ -93,6 +93,26 @@ export default function ProjectsPage() {
     }
   }
 
+
+  async function pingProjects() {
+    setBusy(true);
+    setError("");
+    try {
+      if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
+
+      const result = await apiGet<any>("/diag/projects-ping", { baseUrl: API_HOST });
+
+      const elapsed = result?.elapsedMs ?? "?";
+      const trace = result?.traceId ? ` • traceId=${result.traceId}` : "";
+      setPingResult(`Projects Ping OK • elapsedMs=${elapsed}${trace} • ${new Date().toISOString()}`);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setPingResult("");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   useEffect(() => {
     // Optional: comment this out while you're focused only on sql-ping
     refresh();
@@ -132,6 +152,9 @@ export default function ProjectsPage() {
           </button>
           <button className="btn" onClick={pingSql} disabled={busy}>
             Ping SQL
+          </button>
+          <button className="btn" onClick={pingProjects} disabled={busy}>
+            Ping Projects
           </button>
         </div>
       </div>

@@ -67,24 +67,24 @@ export type UpsertLineItem = {
 };
 
 export async function coreCreateEstimate(body: CreateEstimateRequest) {
-  return apiPost<EstimateDoc>("/api/core/estimates", body);
+  return apiPost<EstimateDoc>("/core/estimates", body);
 }
 
 export async function coreListEstimates(projectId: string, top = 50) {
   return apiGet<{ items: EstimateDoc[] }>(
-    `/api/core/estimates?projectId=${encodeURIComponent(projectId)}&top=${top}`
+    `/core/estimates?projectId=${encodeURIComponent(projectId)}&top=${top}`
   );
 }
 
 export async function coreListVersions(estimateId: string) {
   return apiGet<{ items: EstimateVersionDoc[] }>(
-    `/api/core/estimates/${encodeURIComponent(estimateId)}/versions`
+    `/core/estimates/${encodeURIComponent(estimateId)}/versions`
   );
 }
 
 export async function coreCreateDraftVersion(estimateId: string) {
   return apiPost<EstimateVersionDoc>(
-    `/api/core/estimates/${encodeURIComponent(estimateId)}/versions`,
+    `/core/estimates/${encodeURIComponent(estimateId)}/versions`,
     {}
   );
 }
@@ -97,7 +97,7 @@ export async function coreListLineItems(
 ) {
   const cursorPart = cursor ? `&cursor=${encodeURIComponent(cursor)}` : "";
   return apiGet<{ items: EstimateLineItemDoc[]; nextCursor?: string }>(
-    `/api/core/estimates/${encodeURIComponent(
+    `/core/estimates/${encodeURIComponent(
       estimateId
     )}/versions/${encodeURIComponent(versionId)}/line-items?top=${top}${cursorPart}`
   );
@@ -109,7 +109,7 @@ export async function coreBatchUpsertLineItems(
   items: UpsertLineItem[]
 ) {
   return apiPost<string>(
-    `/api/core/estimates/${encodeURIComponent(
+    `/core/estimates/${encodeURIComponent(
       estimateId
     )}/versions/${encodeURIComponent(versionId)}/line-items:batchUpsert`,
     { items }
@@ -122,7 +122,7 @@ export async function coreDeleteLineItem(
   lineItemId: string
 ) {
   return apiDelete<void>(
-    `/api/core/estimates/${encodeURIComponent(
+    `/core/estimates/${encodeURIComponent(
       estimateId
     )}/versions/${encodeURIComponent(versionId)}/line-items/${encodeURIComponent(
       lineItemId

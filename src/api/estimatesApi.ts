@@ -33,7 +33,7 @@ export type GetEstimatesResult = {
 const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL?.trim?.() || "";
 
 function buildUrl(path: string) {
-  // If API_BASE is empty, this becomes "/api/..."
+  // If API_BASE is empty, this becomes "/..."
   // If API_BASE is set, it becomes "https://.../api/..."
   return `${API_BASE}${path}`;
 }
@@ -83,11 +83,11 @@ function normalizeEstimates(payload: any): GetEstimatesResult {
 }
 
 export async function seedEstimates(): Promise<{ ok: boolean; seededUtc?: string }> {
-  return await fetchJson(buildUrl("/api/seed/estimates"), { method: "POST" });
+  return await fetchJson(buildUrl("/seed/estimates"), { method: "POST" });
 }
 
 export async function getProjects(): Promise<ProjectDto[]> {
-  const payload = await fetchJson<any>(buildUrl("/api/projects"));
+  const payload = await fetchJson<any>(buildUrl("/projects"));
   return normalizeProjects(payload);
 }
 
@@ -101,13 +101,13 @@ export async function getEstimates(args: GetEstimatesArgs): Promise<GetEstimates
     includeDiagnostics,
   });
 
-  const payload = await fetchJson<any>(buildUrl(`/api/estimates?${qs.toString()}`));
+  const payload = await fetchJson<any>(buildUrl(`/estimates?${qs.toString()}`));
   return normalizeEstimates(payload);
 }
 
 // Optional (only if you need it later)
 export async function getEstimateById(projectId: string, estimateId: string): Promise<EstimateDto> {
-  const payload = await fetchJson<any>(buildUrl(`/api/estimates/${encodeURIComponent(projectId)}/${encodeURIComponent(estimateId)}`));
+  const payload = await fetchJson<any>(buildUrl(`/estimates/${encodeURIComponent(projectId)}/${encodeURIComponent(estimateId)}`));
   // Some APIs might return a single item not wrapped; normalize accordingly
   const one = Array.isArray(payload?.items) ? payload.items[0] : payload;
   const normalized = normalizeEstimates({ items: [one] }).items[0];

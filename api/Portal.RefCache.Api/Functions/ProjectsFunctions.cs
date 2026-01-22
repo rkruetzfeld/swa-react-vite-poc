@@ -1,5 +1,5 @@
 // File: api/Portal.RefCache.Api/Functions/ProjectsFunctions.cs
-// Purpose: GET /api/projects reads Projects from Cosmos DB (Portal/Projects) and returns them for AG Grid.
+// Purpose: GET /projects reads Projects from Cosmos DB (Portal/Projects) and returns them for AG Grid.
 
 using Microsoft.Azure.Cosmos;
 using Microsoft.Azure.Functions.Worker;
@@ -20,10 +20,12 @@ public sealed class ProjectsFunctions
 
     [Function("GetProjects")]
     public async Task<HttpResponseData> GetProjects(
-        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "projects")] HttpRequestData req)
+        [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = "projects")] HttpRequestData req,
+        FunctionContext ctx)
     {
-        // Prefer the newer PEG_* names, but fall back to the earlier COSMOS_* names
-        // used elsewhere in the repo.
+        var traceId = ctx.InvocationId;
+
+        // Prefer PEG_* names; fall back to older names.
         var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB")
             ?? Environment.GetEnvironmentVariable("COSMOS_DATABASE")
             ?? "Ledger";
@@ -34,52 +36,102 @@ public sealed class ProjectsFunctions
             ?? Environment.GetEnvironmentVariable("TENANT_ID")
             ?? "default";
 
-        var container = _cosmos.GetDatabase(dbName).GetContainer(containerName);
+        try
+        {
+            var container = _cosmos.GetDatabase(dbName).GetContainer(containerName);
 
-        var q = new QueryDefinition(
-            "SELECT c.projectId, c.projectNumber, c.projectName, c.isActive, c.lastUpdateUtc, c.syncedUtc " +
-            "FROM c WHERE c.tenantId = @tenantId")
-            .WithParameter("@tenantId", tenantId);
+            // Be liberal with schema. We only require projectId + projectName.
+            var q = new QueryDefinition(
+                "SELECT c.projectId, c.projectNumber, c.projectName, c.isActive, c.lastUpdateUtc, c.syncedUtc " +
+                "FROM c WHERE c.tenantId = @tenantId")
+                .WithParameter("@tenantId", tenantId);
 
-        var it = container.GetItemQueryIterator<ProjectRow>(
-            q,
-            requestOptions: new QueryRequestOptions
+            var it = container.GetItemQueryIterator<JsonElement>(
+                q,
+                requestOptions: new QueryRequestOptions
+                {
+                    PartitionKey = new PartitionKey(tenantId),
+                    MaxItemCount = 2000
+                });
+
+            var shaped = new List<object>();
+
+            while (it.HasMoreResults)
             {
-                PartitionKey = new PartitionKey(tenantId),
-                MaxItemCount = 2000
-            });
+                foreach (var doc in await it.ReadNextAsync())
+                {
+                    var projectId = GetString(doc, "projectId");
+                    if (string.IsNullOrWhiteSpace(projectId))
+                        continue;
 
-        var rows = new List<ProjectRow>();
-        while (it.HasMoreResults)
-        {
-            foreach (var row in await it.ReadNextAsync())
-                rows.Add(row);
+                    shaped.Add(new
+                    {
+                        projectId,
+                        name = GetString(doc, "projectName") ?? GetString(doc, "name") ?? "",
+                        updatedUtc = GetString(doc, "lastUpdateUtc") ?? GetString(doc, "updatedUtc") ?? "",
+                        projectNumber = GetString(doc, "projectNumber"),
+                        isActive = GetBool(doc, "isActive"),
+                        syncedUtc = GetString(doc, "syncedUtc")
+                    });
+                }
+            }
+
+            var res = req.CreateResponse(HttpStatusCode.OK);
+            res.Headers.Add("Content-Type", "application/json; charset=utf-8");
+            await res.WriteStringAsync(JsonSerializer.Serialize(shaped, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            return res;
         }
-
-        // Shape the response for the UI (AG Grid)
-        var shaped = rows.Select(r => new
+        catch (CosmosException cex)
         {
-            projectId = r.ProjectId,
-            name = r.ProjectName,
-            updatedUtc = r.LastUpdateUtc,
-            projectNumber = r.ProjectNumber,
-            isActive = r.IsActive,
-            syncedUtc = r.SyncedUtc
-        });
-
-        var res = req.CreateResponse(HttpStatusCode.OK);
-        res.Headers.Add("Content-Type", "application/json; charset=utf-8");
-        await res.WriteStringAsync(JsonSerializer.Serialize(shaped, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
-        return res;
+            var bad = req.CreateResponse(HttpStatusCode.ServiceUnavailable);
+            await bad.WriteAsJsonAsync(new
+            {
+                ok = false,
+                traceId,
+                message = "Cosmos query failed for /projects. Check Cosmos DB/Container/PartitionKey (tenantId).",
+                cosmosStatus = (int)cex.StatusCode,
+                cosmosSubStatus = cex.SubStatusCode,
+                error = cex.Message
+            });
+            return bad;
+        }
+        catch (Exception ex)
+        {
+            var bad = req.CreateResponse(HttpStatusCode.InternalServerError);
+            await bad.WriteAsJsonAsync(new
+            {
+                ok = false,
+                traceId,
+                message = "Unhandled error in /projects.",
+                error = ex.Message
+            });
+            return bad;
+        }
     }
 
-    private sealed class ProjectRow
+    private static string? GetString(JsonElement doc, string name)
     {
-        public int ProjectId { get; set; }
-        public string? ProjectNumber { get; set; }
-        public string? ProjectName { get; set; }
-        public bool IsActive { get; set; }
-        public string? LastUpdateUtc { get; set; }
-        public DateTime? SyncedUtc { get; set; }
+        if (!doc.TryGetProperty(name, out var p)) return null;
+        return p.ValueKind switch
+        {
+            JsonValueKind.String => p.GetString(),
+            JsonValueKind.Number => p.GetRawText(),
+            JsonValueKind.True => "true",
+            JsonValueKind.False => "false",
+            _ => p.GetRawText()
+        };
+    }
+
+    private static bool GetBool(JsonElement doc, string name)
+    {
+        if (!doc.TryGetProperty(name, out var p)) return false;
+        return p.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            JsonValueKind.String => string.Equals(p.GetString(), "true", StringComparison.OrdinalIgnoreCase),
+            JsonValueKind.Number => p.TryGetInt32(out var n) && n != 0,
+            _ => false
+        };
     }
 }
