@@ -60,7 +60,7 @@ async function runSyncNow() {
   setError("");
 
   try {
-    const result = await apiPost<any>("/diag/sql-ping", {}); // POST exists per your function bindings
+    const result = await apiGet("/diag/sql-ping", { baseUrl: import.meta.env.VITE_API_BASE_URL }); // POST exists per your function bindings
     setLog((prev) => prev + `\nPing OK: ${JSON.stringify(result)}`);
   } catch (e: any) {
     setError(e?.message ?? String(e));
