@@ -266,7 +266,7 @@ export default function EstimatesPage() {
     setBusy(true);
     setError("");
     try {
-      const data = await apiGet<{ items: any[] }>("/api/projects");
+      const data = await apiGet<{ items: any[] }>("/projects");
       const raw = Array.isArray(data?.items) ? data.items : [];
 
       const mapped: ProjectDto[] = raw
