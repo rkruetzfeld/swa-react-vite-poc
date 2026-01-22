@@ -42,9 +42,11 @@ export default function ProjectsPage() {
     setBusy(true);
     setError("");
     try {
-      const data = await apiGet<ProjectDto[]>("/projects");
+      // ✅ RELATIVE PATHS ONLY
+      const data = await apiGet<ProjectDto[]>("projects");
       setRows(data ?? []);
-      const h = await apiGet<HealthResponse>("/health/projects");
+
+      const h = await apiGet<HealthResponse>("health/projects");
       setHealth(h ?? null);
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -57,7 +59,8 @@ export default function ProjectsPage() {
     setBusy(true);
     setError("");
     try {
-      await apiPost("/sync/projects", {});
+      // ✅ RELATIVE PATH
+      await apiPost("sync/projects", {});
       await refresh();
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -67,7 +70,6 @@ export default function ProjectsPage() {
 
   useEffect(() => {
     refresh();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -78,9 +80,11 @@ export default function ProjectsPage() {
           <div className="kicker">
             Synced Projects from PMWeb into storage. Joins to Estimates will be by <code>projectId</code>.
           </div>
+
           {health?.latest && (
             <div className="kicker" style={{ marginTop: 6 }}>
-              Last sync: {health.latest.succeeded ? "✅" : "❌"} {new Date(health.latest.startedUtc).toISOString()} •{" "}
+              Last sync: {health.latest.succeeded ? "✅" : "❌"}{" "}
+              {new Date(health.latest.startedUtc).toISOString()} •{" "}
               {health.latest.durationMs} ms • {health.latest.recordCount} projects
               {health.latest.error ? ` • ${health.latest.error}` : ""}
             </div>
@@ -104,7 +108,11 @@ export default function ProjectsPage() {
         </div>
       </div>
 
-      {error && <div className="panel" style={{ border: "1px solid #ffb5b5" }}>{error}</div>}
+      {error && (
+        <div className="panel" style={{ border: "1px solid #ffb5b5" }}>
+          {error}
+        </div>
+      )}
 
       <div className="panel" style={{ flex: 1, minHeight: 0, padding: 0 }}>
         <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
