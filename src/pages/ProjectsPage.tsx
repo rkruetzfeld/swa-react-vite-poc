@@ -42,9 +42,9 @@ export default function ProjectsPage() {
     setBusy(true);
     setError("");
     try {
-      const data = await apiGet<ProjectDto[]>("/projects");
+      const data = await apiGet<ProjectDto[]>("/api/projects");
       setRows(data ?? []);
-      const h = await apiGet<HealthResponse>("/health/projects");
+      const h = await apiGet<HealthResponse>("/api/health/projects");
       setHealth(h ?? null);
     } catch (e: any) {
       setError(e?.message ?? String(e));
@@ -57,7 +57,7 @@ export default function ProjectsPage() {
     setBusy(true);
     setError("");
     try {
-      await apiPost("/sync/projects", {});
+      await apiPost("/api/sync/projects", {});
       await refresh();
     } catch (e: any) {
       setError(e?.message ?? String(e));
