@@ -7,44 +7,44 @@ on:
 jobs:
   build_and_deploy:
     runs-on: ubuntu-latest
-    name: Build and Deploy (app + api)
+    name: Build and Deploy (app only)
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ---------- Frontend ----------
       - name: Use Node 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
-      - name: Install frontend deps
+      - name: Install
         run: npm ci
 
-      - name: Build frontend (Vite)
+      - name: Build (Vite)
         env:
           VITE_AAD_TENANT_ID: ${{ secrets.VITE_AAD_TENANT_ID }}
           VITE_AAD_SPA_CLIENT_ID: ${{ secrets.VITE_AAD_SPA_CLIENT_ID }}
           VITE_AAD_API_SCOPE: ${{ secrets.VITE_AAD_API_SCOPE }}
-          # IMPORTANT: must be /api for SWA managed API
-          VITE_API_BASE_URL: /api
+
+          # IMPORTANT: point to external Function App base
+          # Example: https://pegportal-api-func-cc-001.azurewebsites.net/api
+          VITE_API_BASE_URL: ${{ secrets.VITE_API_BASE_URL }}
         run: npm run build
 
-      # ---------- Deploy (SWA builds API) ----------
-      - name: Deploy to Azure Static Web Apps (app + api)
+      - name: Deploy to Azure Static Web Apps (app only)
         uses: Azure/static-web-apps-deploy@v1
         with:
           azure_static_web_apps_api_token: ${{ secrets.AZURE_STATIC_WEB_APPS_API_TOKEN_BLUE_STONE_08C319F1E }}
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           action: "upload"
 
-          # Source root of your app
-          app_location: "/"
-          # Where Vite outputs
-          output_location: "dist"
+          app_location: "dist"
+          output_location: ""
 
-          # This tells SWA to deploy the managed API
-          api_location: "api"
+          # CRITICAL: do NOT deploy an SWA managed API
+          api_location: ""
+          skip_app_build: true
+          skip_api_build: true
 
           deployment_environment: "production"
