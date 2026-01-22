@@ -48,7 +48,7 @@ async function buildAuthHeaders(url: string): Promise<Record<string, string>> {
 }
 
 async function apiFetch(path: string, init?: RequestInit, opts?: ApiClientOptions) {
-  const baseUrl = (opts?.baseUrl ?? (import.meta.env.VITE_API_BASE_URL as string) ?? "/api").toString();
+  const baseUrl = (opts?.baseUrl ?? (import.meta.env.VITE_API_BASE_URL as string) ?? "").toString();
   const url = joinUrl(baseUrl, path);
 
   const authHeaders = await buildAuthHeaders(url);
