@@ -1,6 +1,5 @@
 // src/App.tsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AgGridReact } from "ag-grid-react";
 import type { ColDef, GridApi, RowDoubleClickedEvent, ValueParserParams } from "ag-grid-community";
 
 import "./components/StatusPill.css";
@@ -9,15 +8,15 @@ import "./App.css";
 import type { EstimateHeader, EstimateLine, ItemCatalog, Status } from "./models/estimateModels";
 import { estimateDataService } from "./services/estimateDataService";
 
-// ✅ Pages (make sure these files exist in src/pages/)
+// Pages
 import ForecastPage from "./pages/ForecastPage";
 import DashboardPage from "./pages/DashboardPage";
 import ReportsPage from "./pages/ReportsPage";
 import ProjectsPage from "./pages/ProjectsPage";
-import HealthPage from "./pages/HealthPage"; // ✅ replace SmokeTestPage with HealthPage
-import SignOutButton from "./auth/SignOutButton";
+import HealthPage from "./pages/HealthPage";
+import EstimatesPage from "./pages/EstimatesPage"; // ✅ wire back in
 
-// ✅ Shared component
+import SignOutButton from "./auth/SignOutButton";
 import StatusPill, { type StatusTone } from "./components/StatusPill";
 
 const PAGE_SIZE = 20;
@@ -125,7 +124,9 @@ export default function App() {
   const [area, setArea] = useState<TopArea>("Forms");
   const [formsExpanded, setFormsExpanded] = useState(true);
   const [formsPage, setFormsPage] = useState<FormsPage>("Estimates");
-  const [view, setView] = useState<View>("EstimatesList");
+
+  // ✅ IMPORTANT: default to Projects so you never land on a null view again
+  const [view, setView] = useState<View>("Projects");
 
   const [pins, setPins] = useState<Set<PinKey>>(() => loadPins());
   useEffect(() => savePins(pins), [pins]);
@@ -138,7 +139,7 @@ export default function App() {
     });
   }
 
-  // --- existing Estimates state below (unchanged) ---
+  // --- existing Estimates state below (left as-is) ---
   const [headers, setHeaders] = useState<EstimateHeader[]>([]);
   const [items, setItems] = useState<ItemCatalog[]>([]);
   const [linesByEstimate, setLinesByEstimate] = useState<Map<string, EstimateLine[]>>(new Map());
@@ -167,27 +168,26 @@ export default function App() {
     [headers, selectedEstimateId]
   );
 
-  // ... keep the rest of your existing Estimates UI code unchanged ...
-
-  // ✅ Wherever you previously rendered SmokeTestPage, render HealthPage instead:
-  // Example (your exact switch/render location may differ):
   function renderMain() {
     switch (view) {
       case "Projects":
         return <ProjectsPage />;
       case "Health":
-        return <HealthPage />; // ✅ replaces SmokeTestPage
+        return <HealthPage />;
       case "Forecast":
         return <ForecastPage />;
+      case "EstimatesList":
+      case "EstimateDetail":
+        return <EstimatesPage />;
       default:
-        return null; // your existing estimates list/detail render likely here
+        // ✅ never render null at app shell level (prevents silent blank pages)
+        return (
+          <div style={{ padding: 16 }}>
+            Unknown view: <code>{String(view)}</code>
+          </div>
+        );
     }
   }
 
-  return (
-    <div className="app-shell">
-      {/* keep your existing shell layout */}
-      {renderMain()}
-    </div>
-  );
+  return <div className="app-shell">{renderMain()}</div>;
 }
