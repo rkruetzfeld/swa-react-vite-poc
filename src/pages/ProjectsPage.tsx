@@ -39,27 +39,40 @@ export default function ProjectsPage() {
     []
   );
 
-  async function refresh() {
-    setBusy(true);
-    setError("");
-    setPingResult("");
-    try {
-      const data = await apiGet<ProjectDto[]>("/projects");
-      setRows(Array.isArray(data) ? data : []);
+async function refresh() {
+  setBusy(true);
+  setError("");
+  try {
+    const data = await apiGet<ProjectDto[]>("/projects");
+    setRows(Array.isArray(data) ? data : []);
 
-      // Health is optional: don't break the page if backend doesn't have it yet
-      try {
-        const h = await apiGet<HealthResponse>("/health/projects");
-        setHealth(h ?? null);
-      } catch {
-        setHealth(null);
-      }
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
-    } finally {
-      setBusy(false);
+    // optional health
+    try {
+      const h = await apiGet<HealthResponse>("/health/projects");
+      setHealth(h ?? null);
+    } catch {
+      setHealth(null);
     }
+  } catch (e: any) {
+    setError(e?.message ?? String(e));
+  } finally {
+    setBusy(false);
   }
+}
+
+async function pingApi() {
+  setBusy(true);
+  setError("");
+  try {
+    // your function supports GET (you just confirmed)
+    await apiGet("/diag/sql-ping");
+  } catch (e: any) {
+    setError(e?.message ?? String(e));
+  } finally {
+    setBusy(false);
+  }
+}
+
 
   // This is a simple backend connectivity check (GET /diag/sql-ping)
   // It is NOT a sync. We'll add a real "sync/projects" endpoint later.
