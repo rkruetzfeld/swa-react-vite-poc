@@ -43,7 +43,7 @@ export default function ProjectsPage() {
     setError("");
     try {
       // ✅ RELATIVE PATHS ONLY
-      const data = await apiGet<ProjectDto[]>("projects");
+      const data = await apiGet<ProjectDto[]>("/projects");
       setRows(data ?? []);
 
       const h = await apiGet<HealthResponse>("health/projects");
@@ -55,18 +55,20 @@ export default function ProjectsPage() {
     }
   }
 
-  async function runSyncNow() {
-    setBusy(true);
-    setError("");
-    try {
-      // ✅ RELATIVE PATH
-      await apiPost("sync/projects", {});
-      await refresh();
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
-      setBusy(false);
-    }
+async function runSyncNow() {
+  setBusy(true);
+  setError("");
+
+  try {
+    const result = await apiPost<any>("/diag/sql-ping", {}); // POST exists per your function bindings
+    setLog((prev) => prev + `\nPing OK: ${JSON.stringify(result)}`);
+  } catch (e: any) {
+    setError(e?.message ?? String(e));
+  } finally {
+    setBusy(false);
   }
+}
+
 
   useEffect(() => {
     refresh();
@@ -103,7 +105,7 @@ export default function ProjectsPage() {
             Refresh
           </button>
           <button className="btn" onClick={runSyncNow} disabled={busy}>
-            Run Sync Now
+            Ping API
           </button>
         </div>
       </div>
@@ -132,3 +134,7 @@ export default function ProjectsPage() {
     </div>
   );
 }
+function setLog(arg0: (prev: any) => string) {
+  throw new Error("Function not implemented.");
+}
+
