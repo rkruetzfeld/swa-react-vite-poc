@@ -24,6 +24,8 @@ public sealed class ProjectsFunctions
         FunctionContext ctx)
     {
         var traceId = ctx.InvocationId;
+        const string BuildMarker = "projects-hotfix-2026-01-23-1647";
+
 
         // Prefer PEG_* names; fall back to older names.
         var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB")
@@ -86,12 +88,16 @@ public sealed class ProjectsFunctions
             }
 
             var res = req.CreateResponse(HttpStatusCode.OK);
-            res.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await res.WriteStringAsync(JsonSerializer.Serialize(
-                shaped,
-                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+                res.Headers.Add("Content-Type", "application/json; charset=utf-8");
+                res.Headers.Add("x-build", BuildMarker);
+
+                await res.WriteStringAsync(JsonSerializer.Serialize(
+                    shaped,
+                    new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
             return res;
+
+
         }
         catch (CosmosException cex)
         {
@@ -110,15 +116,21 @@ public sealed class ProjectsFunctions
         catch (Exception ex)
         {
             var bad = req.CreateResponse(HttpStatusCode.InternalServerError);
+            bad.Headers.Add("x-build", BuildMarker);
+
             await bad.WriteAsJsonAsync(new
             {
                 ok = false,
                 traceId,
+                build = BuildMarker,
                 message = "Unhandled error in /projects.",
-                error = ex.Message
+                error = ex.Message,
+                detail = ex.ToString()
             });
-            return bad;
-        }
+
+    return bad;
+}
+
     }
 
     private static string? GetString(JsonElement doc, string name)
