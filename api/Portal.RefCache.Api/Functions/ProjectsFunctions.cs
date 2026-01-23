@@ -26,7 +26,6 @@ public sealed class ProjectsFunctions
         var traceId = ctx.InvocationId;
         const string BuildMarker = "projects-hotfix-2026-01-23-1647";
 
-
         // Prefer PEG_* names; fall back to older names.
         var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB")
             ?? Environment.GetEnvironmentVariable("COSMOS_DATABASE")
@@ -44,13 +43,13 @@ public sealed class ProjectsFunctions
         {
             var container = _cosmos.GetDatabase(dbName).GetContainer(containerName);
 
-            // Be liberal with schema. We only require projectId + projectName.
+            // We project only the fields we need into a POCO (avoids JsonElement lifetime issues).
             var q = new QueryDefinition(
                     "SELECT c.projectId, c.projectNumber, c.projectName, c.isActive, c.lastUpdateUtc, c.syncedUtc " +
                     "FROM c WHERE c.tenantId = @tenantId")
                 .WithParameter("@tenantId", tenantId);
 
-            var it = container.GetItemQueryIterator<JsonElement>(
+            var it = container.GetItemQueryIterator<ProjectDoc>(
                 q,
                 requestOptions: new QueryRequestOptions
                 {
@@ -66,51 +65,47 @@ public sealed class ProjectsFunctions
 
                 foreach (var doc in page)
                 {
-                    // Cosmos can materialize JsonElement backed by an internal JsonDocument
-                    // that may be disposed after the FeedResponse is consumed. Clone() makes
-                    // the element safe to access beyond the immediate enumerator lifetime.
-                    var safe = doc.Clone();
-
-                    var projectId = GetString(safe, "projectId");
-                    if (string.IsNullOrWhiteSpace(projectId))
+                    if (string.IsNullOrWhiteSpace(doc.projectId))
                         continue;
 
                     shaped.Add(new
                     {
-                        projectId,
-                        name = GetString(safe, "projectName") ?? GetString(safe, "name") ?? "",
-                        updatedUtc = GetString(safe, "lastUpdateUtc") ?? GetString(safe, "updatedUtc") ?? "",
-                        projectNumber = GetString(safe, "projectNumber"),
-                        isActive = GetBool(safe, "isActive"),
-                        syncedUtc = GetString(safe, "syncedUtc")
+                        projectId = doc.projectId,
+                        name = doc.projectName ?? "",
+                        updatedUtc = doc.lastUpdateUtc ?? "",
+                        projectNumber = doc.projectNumber,
+                        isActive = doc.isActive ?? false,
+                        syncedUtc = doc.syncedUtc
                     });
                 }
             }
 
             var res = req.CreateResponse(HttpStatusCode.OK);
-                res.Headers.Add("Content-Type", "application/json; charset=utf-8");
-                res.Headers.Add("x-build", BuildMarker);
+            res.Headers.Add("Content-Type", "application/json; charset=utf-8");
+            res.Headers.Add("x-build", BuildMarker);
 
-                await res.WriteStringAsync(JsonSerializer.Serialize(
-                    shaped,
-                    new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            await res.WriteStringAsync(JsonSerializer.Serialize(
+                shaped,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
             return res;
-
-
         }
         catch (CosmosException cex)
         {
             var bad = req.CreateResponse(HttpStatusCode.ServiceUnavailable);
+            bad.Headers.Add("x-build", BuildMarker);
+
             await bad.WriteAsJsonAsync(new
             {
                 ok = false,
                 traceId,
+                build = BuildMarker,
                 message = "Cosmos query failed for /projects. Check Cosmos DB/Container/PartitionKey (tenantId).",
                 cosmosStatus = (int)cex.StatusCode,
                 cosmosSubStatus = cex.SubStatusCode,
                 error = cex.Message
             });
+
             return bad;
         }
         catch (Exception ex)
@@ -128,34 +123,18 @@ public sealed class ProjectsFunctions
                 detail = ex.ToString()
             });
 
-    return bad;
-}
-
+            return bad;
+        }
     }
 
-    private static string? GetString(JsonElement doc, string name)
+    // POCO projection for Cosmos query results (matches SELECT fields).
+    private sealed class ProjectDoc
     {
-        if (!doc.TryGetProperty(name, out var p)) return null;
-        return p.ValueKind switch
-        {
-            JsonValueKind.String => p.GetString(),
-            JsonValueKind.Number => p.GetRawText(),
-            JsonValueKind.True => "true",
-            JsonValueKind.False => "false",
-            _ => p.GetRawText()
-        };
-    }
-
-    private static bool GetBool(JsonElement doc, string name)
-    {
-        if (!doc.TryGetProperty(name, out var p)) return false;
-        return p.ValueKind switch
-        {
-            JsonValueKind.True => true,
-            JsonValueKind.False => false,
-            JsonValueKind.String => string.Equals(p.GetString(), "true", StringComparison.OrdinalIgnoreCase),
-            JsonValueKind.Number => p.TryGetInt32(out var n) && n != 0,
-            _ => false
-        };
+        public string? projectId { get; set; }
+        public string? projectNumber { get; set; }
+        public string? projectName { get; set; }
+        public bool? isActive { get; set; }
+        public string? lastUpdateUtc { get; set; }
+        public string? syncedUtc { get; set; }
     }
 }
