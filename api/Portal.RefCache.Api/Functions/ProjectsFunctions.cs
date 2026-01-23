@@ -56,25 +56,31 @@ public sealed class ProjectsFunctions
 
             var shaped = new List<object>();
 
-            while (it.HasMoreResults)
-            {
-                foreach (var doc in await it.ReadNextAsync())
-                {
-                    var projectId = GetString(doc, "projectId");
-                    if (string.IsNullOrWhiteSpace(projectId))
-                        continue;
+while (it.HasMoreResults)
+{
+    foreach (var doc in await it.ReadNextAsync())
+    {
+        // Cosmos can materialize JsonElement backed by an internal JsonDocument
+        // that may be disposed after the FeedResponse is consumed. Clone() makes
+        // the element safe to access beyond the immediate enumerator lifetime.
+        var safe = doc.Clone();
 
-                    shaped.Add(new
-                    {
-                        projectId,
-                        name = GetString(doc, "projectName") ?? GetString(doc, "name") ?? "",
-                        updatedUtc = GetString(doc, "lastUpdateUtc") ?? GetString(doc, "updatedUtc") ?? "",
-                        projectNumber = GetString(doc, "projectNumber"),
-                        isActive = GetBool(doc, "isActive"),
-                        syncedUtc = GetString(doc, "syncedUtc")
-                    });
-                }
-            }
+        var projectId = GetString(safe, "projectId");
+        if (string.IsNullOrWhiteSpace(projectId))
+            continue;
+
+        shaped.Add(new
+        {
+            projectId,
+            name = GetString(safe, "projectName") ?? GetString(safe, "name") ?? "",
+            updatedUtc = GetString(safe, "lastUpdateUtc") ?? GetString(safe, "updatedUtc") ?? "",
+            projectNumber = GetString(safe, "projectNumber"),
+            isActive = GetBool(safe, "isActive"),
+            syncedUtc = GetString(safe, "syncedUtc")
+        });
+    }
+}
+
 
             var res = req.CreateResponse(HttpStatusCode.OK);
             res.Headers.Add("Content-Type", "application/json; charset=utf-8");
