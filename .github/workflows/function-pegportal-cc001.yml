@@ -28,9 +28,19 @@ jobs:
         run: dotnet publish api/Portal.RefCache.Api/Portal_RefCache_Api.csproj -c Release -o api_publish --no-restore
 
       # Optional sanity check: fail fast if publish output isn't a Function package root
+      - name: Inspect publish output
+        run: |
+          echo "PWD=$(pwd)"
+          echo "Listing api_publish:"
+          ls -la api_publish || true
+          echo "Find host.json:"
+          find api_publish -maxdepth 3 -name host.json -print || true
+          echo "Top 200 files:"
+          find api_publish -maxdepth 2 -type f | head -n 200
+
       - name: Validate publish output
         run: |
-          test -f api_publish/host.json
+          find api_publish -maxdepth 3 -name host.json -print -quit | grep -q host.json
           test -d api_publish/bin
 
       - name: Deploy to Azure Function App
