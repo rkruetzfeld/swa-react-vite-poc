@@ -1,0 +1,36 @@
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant UI as SWA UI (React)
+  participant API as Function App API
+  participant C as Cosmos DB (Portal/Estimates)
+  participant LAH as Logic App (Estimates Headers)
+  participant LAD as Logic App (Estimate Details)
+  participant SQL as PMWeb SQL (SP)
+
+  U->>UI: Click "Sync from SQL"
+  UI->>API: POST /sync/estimates
+  API->>LAH: POST ESTIMATES_SYNC_URL {sinceUtc,...}
+  LAH->>SQL: Execute header SP
+  SQL-->>LAH: header rows
+  LAH-->>API: {results:[headers...]}
+
+  API->>LAD: POST ESTIMATEDETAILS_SYNC_URL {sinceUtc,...}
+  LAD->>SQL: Execute detail SP
+  SQL-->>LAD: detail rows
+  LAD-->>API: {results:[details...]}
+
+  API->>C: Upsert header docs + detail docs
+  API-->>UI: {ok:true, headersUpserted:n, detailsUpserted:m}
+
+  U->>UI: View estimates list / open estimate
+  UI->>API: GET /estimates
+  API->>C: Query docType=pmwebEstimateHeader
+  C-->>API: headers
+  API-->>UI: headers JSON
+  UI-->>U: list
+
+  UI->>API: GET /estimates/{estimateId}/details
+  API->>C: Query docType=pmwebEstimateDetail AND estimateId
+  C-->>API: details
+  API-->>UI: details JSON

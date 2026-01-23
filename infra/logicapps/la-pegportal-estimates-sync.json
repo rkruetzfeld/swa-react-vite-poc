@@ -1,0 +1,86 @@
+{
+  "definition": {
+    "$schema": "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+    "contentVersion": "1.0.0.0",
+    "triggers": {
+      "manual": {
+        "type": "Request",
+        "kind": "Http",
+        "inputs": {
+          "schema": {
+            "type": "object",
+            "properties": {
+              "sinceUtc": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "includeInactive": {
+                "type": [
+                  "boolean",
+                  "null"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
+    "actions": {
+      "Execute_stored_procedure_(V2)": {
+        "type": "ApiConnection",
+        "inputs": {
+          "host": {
+            "connection": {
+              "name": "@parameters('$connections')['sql-1']['connectionId']"
+            }
+          },
+          "method": "post",
+          "body": {
+            "SinceUtc": "@{triggerBody()?['sinceUtc']}",
+            "IncludeInactive": "@{coalesce(triggerBody()?['includeInactive'], false)}"
+          },
+          "path": "/v2/datasets/@{encodeURIComponent(encodeURIComponent('default'))},@{encodeURIComponent(encodeURIComponent('default'))}/procedures/@{encodeURIComponent(encodeURIComponent('dbo.PEG_PortalSync_GetEstimates'))}"
+        }
+      },
+      "Response": {
+        "runAfter": {
+          "Execute_stored_procedure_(V2)": [
+            "Succeeded"
+          ]
+        },
+        "type": "Response",
+        "inputs": {
+          "statusCode": 200,
+          "body": {
+            "ok": true,
+            "serverUtc": "@{utcNow()}",
+            "rowCount": "@{length(body('Execute_stored_procedure_(V2)')?['ResultSets']?['Table1'])}",
+            "results": "@body('Execute_stored_procedure_(V2)')?['ResultSets']?['Table1']"
+          }
+        }
+      }
+    },
+    "outputs": {},
+    "parameters": {
+      "$connections": {
+        "type": "Object",
+        "defaultValue": {}
+      }
+    }
+  },
+  "parameters": {
+    "$connections": {
+      "type": "Object",
+      "value": {
+        "sql-1": {
+          "id": "/subscriptions/<SUBSCRIPTION_ID>/providers/Microsoft.Web/locations/canadacentral/managedApis/sql",
+          "connectionId": "/subscriptions/<SUBSCRIPTION_ID>/resourceGroups/rg-swa-react-vite-poc/providers/Microsoft.Web/connections/sql-1",
+          "connectionName": "sql-1",
+          "connectionProperties": {}
+        }
+      }
+    }
+  }
+}

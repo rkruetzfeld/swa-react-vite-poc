@@ -1,0 +1,589 @@
+[
+  {
+    "name": "Core_CreateEstimate",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.CreateEstimate",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "core/estimates",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Core_ListEstimates",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.ListEstimates",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "core/estimates",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Core_GetEstimate",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.GetEstimate",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "core/estimates/{estimateId}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Core_CreateDraftVersion",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.CreateDraftVersion",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "core/estimates/{estimateId}/versions",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Core_ListVersions",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.ListVersions",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "core/estimates/{estimateId}/versions",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Core_ListLineItems",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.ListLineItems",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "core/estimates/{estimateId}/versions/{versionId}/line-items",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Core_BatchUpsertLineItems",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.BatchUpsertLineItems",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "core/estimates/{estimateId}/versions/{versionId}/line-items:batchUpsert",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Core_DeleteLineItem",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.CoreEstimatesFunctions.DeleteLineItem",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "core/estimates/{estimateId}/versions/{versionId}/line-items/{lineItemId}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DiagProjectsPing",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.DiagProjectsFunctions.ProjectsPing",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "diag/projects-ping",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DiagSqlPing",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.DiagSqlPing.Run",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get",
+          "post"
+        ],
+        "route": "diag/sql-ping",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "CreateEstimate",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.EstimatesFunctions.CreateEstimate",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "estimates",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetEstimates",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.EstimatesFunctions.GetEstimates",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "estimates",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetEstimateById",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.EstimatesFunctions.GetEstimateById",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "estimates/{projectId}/{estimateId}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "UpdateEstimate",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.EstimatesFunctions.UpdateEstimate",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "put"
+        ],
+        "route": "estimates/{projectId}/{estimateId}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "DeleteEstimate",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.EstimatesFunctions.DeleteEstimate",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "delete"
+        ],
+        "route": "estimates/{projectId}/{estimateId}",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Health_Projects",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.HealthFunctions.Projects",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "health/projects",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "GetProjects",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.ProjectsFunctions.GetProjects",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "projects",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "SyncProjectsNow",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.ProjectsOpsFunctions.SyncProjectsNow",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get",
+          "post"
+        ],
+        "route": "sync/projects",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ProjectsHealth",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.ProjectsOpsFunctions.ProjectsHealth",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "health/sync-runs/projects",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "ProjectsHealthUi",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.ProjectsOpsFunctions.ProjectsHealthUi",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "get"
+        ],
+        "route": "health/projects",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  },
+  {
+    "name": "Projects_Sync_Timer",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.ProjectsSyncFunctions.Run",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "timer",
+        "direction": "In",
+        "type": "timerTrigger",
+        "schedule": "0 */15 * * * *",
+        "properties": {}
+      }
+    ]
+  },
+  {
+    "name": "SeedEstimates",
+    "scriptFile": "Portal_RefCache_Api.dll",
+    "entryPoint": "Portal.RefCache.Api.Functions.SeedEstimates.Run",
+    "language": "dotnet-isolated",
+    "properties": {
+      "IsCodeless": false
+    },
+    "bindings": [
+      {
+        "name": "req",
+        "direction": "In",
+        "type": "httpTrigger",
+        "authLevel": "Anonymous",
+        "methods": [
+          "post"
+        ],
+        "route": "seed/estimates",
+        "properties": {}
+      },
+      {
+        "name": "$return",
+        "type": "http",
+        "direction": "Out"
+      }
+    ]
+  }
+]
