@@ -29,9 +29,11 @@ public sealed class ProjectsFunctions
         var dbName = Environment.GetEnvironmentVariable("PEG_COSMOS_DB")
             ?? Environment.GetEnvironmentVariable("COSMOS_DATABASE")
             ?? "Ledger";
+
         var containerName = Environment.GetEnvironmentVariable("PEG_COSMOS_PROJECTS_CONTAINER")
             ?? Environment.GetEnvironmentVariable("COSMOS_CONTAINER")
             ?? "Projects";
+
         var tenantId = Environment.GetEnvironmentVariable("PEG_TENANT_ID")
             ?? Environment.GetEnvironmentVariable("TENANT_ID")
             ?? "default";
@@ -42,8 +44,8 @@ public sealed class ProjectsFunctions
 
             // Be liberal with schema. We only require projectId + projectName.
             var q = new QueryDefinition(
-                "SELECT c.projectId, c.projectNumber, c.projectName, c.isActive, c.lastUpdateUtc, c.syncedUtc " +
-                "FROM c WHERE c.tenantId = @tenantId")
+                    "SELECT c.projectId, c.projectNumber, c.projectName, c.isActive, c.lastUpdateUtc, c.syncedUtc " +
+                    "FROM c WHERE c.tenantId = @tenantId")
                 .WithParameter("@tenantId", tenantId);
 
             var it = container.GetItemQueryIterator<JsonElement>(
@@ -56,35 +58,39 @@ public sealed class ProjectsFunctions
 
             var shaped = new List<object>();
 
-while (it.HasMoreResults)
-{
-    foreach (var doc in await it.ReadNextAsync())
-    {
-        // Cosmos can materialize JsonElement backed by an internal JsonDocument
-        // that may be disposed after the FeedResponse is consumed. Clone() makes
-        // the element safe to access beyond the immediate enumerator lifetime.
-        var safe = doc.Clone();
+            while (it.HasMoreResults)
+            {
+                var page = await it.ReadNextAsync();
 
-        var projectId = GetString(safe, "projectId");
-        if (string.IsNullOrWhiteSpace(projectId))
-            continue;
+                foreach (var doc in page)
+                {
+                    // Cosmos can materialize JsonElement backed by an internal JsonDocument
+                    // that may be disposed after the FeedResponse is consumed. Clone() makes
+                    // the element safe to access beyond the immediate enumerator lifetime.
+                    var safe = doc.Clone();
 
-        shaped.Add(new
-        {
-            projectId,
-            name = GetString(safe, "projectName") ?? GetString(safe, "name") ?? "",
-            updatedUtc = GetString(safe, "lastUpdateUtc") ?? GetString(safe, "updatedUtc") ?? "",
-            projectNumber = GetString(safe, "projectNumber"),
-            isActive = GetBool(safe, "isActive"),
-            syncedUtc = GetString(safe, "syncedUtc")
-        });
-    }
-}
+                    var projectId = GetString(safe, "projectId");
+                    if (string.IsNullOrWhiteSpace(projectId))
+                        continue;
 
+                    shaped.Add(new
+                    {
+                        projectId,
+                        name = GetString(safe, "projectName") ?? GetString(safe, "name") ?? "",
+                        updatedUtc = GetString(safe, "lastUpdateUtc") ?? GetString(safe, "updatedUtc") ?? "",
+                        projectNumber = GetString(safe, "projectNumber"),
+                        isActive = GetBool(safe, "isActive"),
+                        syncedUtc = GetString(safe, "syncedUtc")
+                    });
+                }
+            }
 
             var res = req.CreateResponse(HttpStatusCode.OK);
             res.Headers.Add("Content-Type", "application/json; charset=utf-8");
-            await res.WriteStringAsync(JsonSerializer.Serialize(shaped, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+            await res.WriteStringAsync(JsonSerializer.Serialize(
+                shaped,
+                new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+
             return res;
         }
         catch (CosmosException cex)
