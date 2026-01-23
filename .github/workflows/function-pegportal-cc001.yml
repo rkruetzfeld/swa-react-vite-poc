@@ -27,9 +27,22 @@ jobs:
       - name: Publish (Function App)
         run: dotnet publish api/Portal.RefCache.Api/Portal_RefCache_Api.csproj -c Release -o api_publish --no-restore
 
-      # Optional sanity check: fail fast if publish output isn't a Function package root
+      - name: Inspect publish output
+        run: |
+          echo "PWD=$(pwd)"
+          echo "Listing api_publish:"
+          ls -la api_publish || true
+          echo "Find host.json:"
+          find api_publish -maxdepth 3 -name host.json -print || true
+          echo "Top 200 files:"
+          find api_publish -maxdepth 2 -type f | head -n 200
 
-
+      - name: Validate publish output
+        run: |
+          test -f api_publish/host.json
+          test -f api_publish/worker.config.json
+          test -f api_publish/functions.metadata
+          test -f api_publish/Portal_RefCache_Api.dll
 
       - name: Deploy to Azure Function App
         uses: Azure/functions-action@v1
@@ -37,3 +50,7 @@ jobs:
           app-name: "pegportal-api-func-cc-001"
           package: "api_publish"
           publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_PEGPORTAL_CC001 }}
+          slot-name: "Production"
+          scm-do-build-during-deployment: false
+          enable-oryx-build: false
+          respect-funcignore: true
