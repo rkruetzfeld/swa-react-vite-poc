@@ -1,115 +1,79 @@
-// src/api/estimatesApi.ts
-
-export type ProjectDto = {
-  projectId: string;
-  name: string;
-  updatedUtc?: string;
-};
-
-export type EstimateDto = {
+export type PmwebEstimateHeader = {
   estimateId: string;
-  projectId: string;
-  name: string;
-  status: string;
-  createdUtc?: string;
-  updatedUtc?: string;
-  amount?: number;
-  currency?: string;
+  projectId?: string | null;
+  revisionId?: string | null;
+  revisionNumber?: number | null;
+  revisionDate?: string | null;
+  description?: string | null;
+  reference?: string | null;
+  docStatusId?: string | null;
+  currencyId?: string | null;
+  isActive?: boolean | null;
+  categoryId?: string | null;
+  uomId?: string | null;
+  estimateUnit?: number | null;
+  totalCostValue?: number | null;
+  totalExtCostValue?: number | null;
+  createdDate?: string | null;
+  createdBy?: string | null;
+  updatedDate?: string | null;
+  updatedBy?: string | null;
 };
 
-export type GetEstimatesArgs = {
-  projectId: string;
-  top?: number;
-  includeDiagnostics?: boolean;
+export type PmwebEstimateDetail = {
+  detailId: string;
+  estimateId: string;
+  lineNumber?: number | null;
+  itemCode?: string | null;
+  description?: string | null;
+  costCodeId?: string | null;
+  costTypeId?: string | null;
+  uomId?: string | null;
+  quantity?: number | null;
+  unitCost?: number | null;
+  totalCost?: number | null;
+  extCost?: number | null;
+  year?: number | null;
+  periodId?: string | null;
+  notes1?: string | null;
 };
 
-export type GetEstimatesResult = {
-  items: EstimateDto[];
-  diagnostics?: Record<string, unknown> | null;
-};
+export async function getPmwebEstimates(apiBaseUrl: string, projectId?: string): Promise<PmwebEstimateHeader[]> {
+  const url = new URL(`${apiBaseUrl}/estimates`);
+  if (projectId) url.searchParams.set("projectId", projectId);
 
-// For local/dev you can set VITE_API_BASE_URL in .env.local
-// Example: VITE_API_BASE_URL=https://pegportal-api-func-cc-001.azurewebsites.net
-const API_BASE = (import.meta as any).env?.VITE_API_BASE_URL?.trim?.() || "";
-
-function buildUrl(path: string) {
-  // If API_BASE is empty, this becomes "/..."
-  // If API_BASE is set, it becomes "https://.../api/..."
-  return `${API_BASE}${path}`;
-}
-
-async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, init);
-  if (!res.ok) {
-    const text = await res.text().catch(() => "");
-    throw new Error(`HTTP ${res.status} ${res.statusText}: ${text}`.trim());
+  const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+  if (!resp.ok) {
+    throw new Error(`GET /estimates failed: ${resp.status} ${resp.statusText}`);
   }
-  return (await res.json()) as T;
+
+  const json = (await resp.json()) as { ok?: boolean; estimates?: PmwebEstimateHeader[] };
+  return json.estimates ?? [];
 }
 
-function pick<T = any>(o: any, ...keys: string[]): T | undefined {
-  for (const k of keys) {
-    if (o && typeof o === "object" && k in o) return o[k] as T;
+export async function getPmwebEstimateDetails(apiBaseUrl: string, estimateId: string): Promise<PmwebEstimateDetail[]> {
+  const url = new URL(`${apiBaseUrl}/estimates/${encodeURIComponent(estimateId)}/details`);
+
+  const resp = await fetch(url.toString(), { headers: { Accept: "application/json" } });
+  if (!resp.ok) {
+    throw new Error(`GET /estimates/${estimateId}/details failed: ${resp.status} ${resp.statusText}`);
   }
-  return undefined;
+
+  const json = (await resp.json()) as { ok?: boolean; details?: PmwebEstimateDetail[] };
+  return json.details ?? [];
 }
 
-function normalizeProjects(payload: any): ProjectDto[] {
-  const raw = Array.isArray(payload) ? payload : pick<any[]>(payload, "items", "Items") || [];
-  return raw.map((p: any) => ({
-    projectId: pick<string>(p, "projectId", "ProjectId") || "",
-    name: pick<string>(p, "name", "Name") || "",
-    updatedUtc: pick<string>(p, "updatedUtc", "UpdatedUtc"),
-  }));
-}
-
-function normalizeEstimates(payload: any): GetEstimatesResult {
-  const rawItems = pick<any[]>(payload, "items", "Items") || [];
-  const diagnostics =
-    pick<Record<string, unknown> | null>(payload, "diagnostics", "Diagnostics") ?? null;
-
-  const items: EstimateDto[] = rawItems.map((e: any) => ({
-    estimateId: pick<string>(e, "estimateId", "EstimateId") || "",
-    projectId: pick<string>(e, "projectId", "ProjectId") || "",
-    name: pick<string>(e, "name", "Name") || "",
-    status: pick<string>(e, "status", "Status") || "",
-    createdUtc: pick<string>(e, "createdUtc", "CreatedUtc"),
-    updatedUtc: pick<string>(e, "updatedUtc", "UpdatedUtc"),
-    amount: pick<number>(e, "amount", "Amount"),
-    currency: pick<string>(e, "currency", "Currency"),
-  }));
-
-  return { items, diagnostics };
-}
-
-export async function seedEstimates(): Promise<{ ok: boolean; seededUtc?: string }> {
-  return await fetchJson(buildUrl("/seed/estimates"), { method: "POST" });
-}
-
-export async function getProjects(): Promise<ProjectDto[]> {
-  const payload = await fetchJson<any>(buildUrl("/projects"));
-  return normalizeProjects(payload);
-}
-
-export async function getEstimates(args: GetEstimatesArgs): Promise<GetEstimatesResult> {
-  const top = args.top ?? 20;
-  const includeDiagnostics = args.includeDiagnostics ? "true" : "false";
-
-  const qs = new URLSearchParams({
-    projectId: args.projectId,
-    top: String(top),
-    includeDiagnostics,
+export async function syncPmwebEstimates(apiBaseUrl: string, sinceUtc?: string | null, includeInactive?: boolean | null) {
+  const resp = await fetch(`${apiBaseUrl}/sync/estimates`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ sinceUtc: sinceUtc ?? null, includeInactive: includeInactive ?? null }),
   });
 
-  const payload = await fetchJson<any>(buildUrl(`/estimates?${qs.toString()}`));
-  return normalizeEstimates(payload);
-}
+  if (!resp.ok) {
+    const text = await resp.text();
+    throw new Error(`POST /sync/estimates failed: ${resp.status} ${resp.statusText} :: ${text}`);
+  }
 
-// Optional (only if you need it later)
-export async function getEstimateById(projectId: string, estimateId: string): Promise<EstimateDto> {
-  const payload = await fetchJson<any>(buildUrl(`/estimates/${encodeURIComponent(projectId)}/${encodeURIComponent(estimateId)}`));
-  // Some APIs might return a single item not wrapped; normalize accordingly
-  const one = Array.isArray(payload?.items) ? payload.items[0] : payload;
-  const normalized = normalizeEstimates({ items: [one] }).items[0];
-  return normalized;
+  return resp.json();
 }

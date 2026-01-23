@@ -1,279 +1,40 @@
-// src/App.tsx
-import { useEffect, useMemo, useRef, useState } from "react";
-import type { ColDef, GridApi, RowDoubleClickedEvent, ValueParserParams } from "ag-grid-community";
+import { useMemo, useState } from "react";
 
-import "./components/StatusPill.css";
-import "./App.css";
+import Sidebar, { type NavItem } from "./components/Sidebar";
 
-import type { EstimateHeader, EstimateLine, ItemCatalog, Status } from "./models/estimateModels";
-import { estimateDataService } from "./services/estimateDataService";
-
-// Pages
-import ForecastPage from "./pages/ForecastPage";
 import DashboardPage from "./pages/DashboardPage";
-import ReportsPage from "./pages/ReportsPage";
 import ProjectsPage from "./pages/ProjectsPage";
-import HealthPage from "./pages/HealthPage";
-import EstimatesPage from "./pages/EstimatesPage"; // ✅ wire back in
+import EstimatesPage from "./pages/EstimatesPage";
+import DiagnosticsPage from "./pages/DiagnosticsPage";
 
-import SignOutButton from "./auth/SignOutButton";
-import StatusPill, { type StatusTone } from "./components/StatusPill";
-
-
-// Function App host (no /api). Used for display only.
-const API_HOST = (import.meta.env.VITE_API_BASE_URL ?? "").toString().replace(/\/+$/, "");
-
-const PAGE_SIZE = 20;
-const UOM_OPTIONS = ["LS", "ea", "day", "km", "m", "m2", "m3", "t", "kg"];
-
-// Shell navigation types
-type TopArea = "Forms" | "Reports" | "Dashboards";
-type FormsPage = "Estimates" | "Forecast" | "Projects";
-type View = "EstimatesList" | "EstimateDetail" | "Forecast" | "Projects" | "Health";
-
-type PinKey = `Forms:${FormsPage}`;
-
-function uuid(): string {
-  return Math.random().toString(16).slice(2) + "-" + Date.now().toString(16);
-}
-
-function formatDate(iso: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (isNaN(d.getTime())) return "";
-  return d.toLocaleDateString();
-}
-
-function formatCurrencyCAD(n: number): string {
-  if (!isFinite(n)) return "";
-  return n.toLocaleString(undefined, { style: "currency", currency: "CAD" });
-}
-
-function parseNumber(p: ValueParserParams): number {
-  const raw = String(p.newValue ?? "").trim();
-  if (!raw) return 0;
-  const cleaned = raw.replace(/[^0-9.\-]/g, "");
-  const n = Number(cleaned);
-  return isFinite(n) ? n : 0;
-}
-
-function toIsoDateOnly(d: Date): string {
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, "0");
-  const dd = String(d.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function parseDateOnlyToRangeStart(yyyyMmDd: string): Date | null {
-  if (!yyyyMmDd) return null;
-  const [y, m, d] = yyyyMmDd.split("-").map((x) => Number(x));
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, 0, 0, 0, 0);
-}
-
-function parseDateOnlyToRangeEnd(yyyyMmDd: string): Date | null {
-  if (!yyyyMmDd) return null;
-  const [y, m, d] = yyyyMmDd.split("-").map((x) => Number(x));
-  if (!y || !m || !d) return null;
-  return new Date(y, m - 1, d, 23, 59, 59, 999);
-}
-
-// Status -> tone mapping
-function statusToTone(v: Status): StatusTone {
-  switch (v) {
-    case "Draft":
-      return "neutral";
-    case "Submitted":
-      return "warning";
-    case "Approved":
-      return "success";
-    case "Completed":
-      return "info";
-    default:
-      return "neutral";
-  }
-}
-
-function loadPins(): Set<PinKey> {
-  const allowed: PinKey[] = ["Forms:Estimates", "Forms:Forecast", "Forms:Projects"];
-  try {
-    const raw = localStorage.getItem("pinnedLinks");
-    if (!raw) return new Set(allowed);
-    const arr = JSON.parse(raw) as string[];
-    const filtered = arr.filter((x) => allowed.includes(x as PinKey)) as PinKey[];
-    return new Set(filtered.length ? filtered : allowed);
-  } catch {
-    return new Set(allowed);
-  }
-}
-
-function savePins(pins: Set<PinKey>) {
-  localStorage.setItem("pinnedLinks", JSON.stringify(Array.from(pins.values())));
-}
+type ViewKey = "dashboard" | "projects" | "estimates" | "diagnostics";
 
 export default function App() {
-  const [vp, setVp] = useState(() => ({ w: window.innerWidth, h: window.innerHeight }));
-  useEffect(() => {
-    const onResize = () => setVp({ w: window.innerWidth, h: window.innerHeight });
-    window.addEventListener("resize", onResize);
-    return () => window.removeEventListener("resize", onResize);
-  }, []);
-
-  const isDrawer = vp.w <= 900;
-  const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => !isDrawer);
-  useEffect(() => setSidebarOpen(!isDrawer), [isDrawer]);
-
-  const [sidebarCollapsed, setSidebarCollapsed] = useState<boolean>(false);
-
-  const [area, setArea] = useState<TopArea>("Forms");
-  const [formsExpanded, setFormsExpanded] = useState(true);
-  const [formsPage, setFormsPage] = useState<FormsPage>("Estimates");
-
-  // ✅ IMPORTANT: default to Projects so you never land on a null view again
-  const [view, setView] = useState<View>("Projects");
-
-  const [pins, setPins] = useState<Set<PinKey>>(() => loadPins());
-  useEffect(() => savePins(pins), [pins]);
-  function togglePin(key: PinKey) {
-    setPins((prev) => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }
-
-  // --- existing Estimates state below (left as-is) ---
-  const [headers, setHeaders] = useState<EstimateHeader[]>([]);
-  const [items, setItems] = useState<ItemCatalog[]>([]);
-  const [linesByEstimate, setLinesByEstimate] = useState<Map<string, EstimateLine[]>>(new Map());
-
-  const [loadingHeaders, setLoadingHeaders] = useState(true);
-  const [loadingItems, setLoadingItems] = useState(true);
-  const [loadingLines, setLoadingLines] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(null);
-
-  const listApiRef = useRef<GridApi | null>(null);
-  const detailApiRef = useRef<GridApi | null>(null);
-
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | Status>("All");
-  const [fromDate, setFromDate] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 3650);
-    return toIsoDateOnly(d);
-  });
-  const [toDate, setToDate] = useState(() => toIsoDateOnly(new Date()));
-
-  const selectedHeader = useMemo(
-    () => headers.find((h) => h.estimateId === selectedEstimateId) ?? null,
-    [headers, selectedEstimateId]
+  const navItems: NavItem[] = useMemo(
+    () => [
+      { key: "dashboard", label: "Dashboard", section: "core" },
+      { key: "projects", label: "Projects", section: "data" },
+      { key: "estimates", label: "Estimates", section: "data" },
+      { key: "diagnostics", label: "Diagnostics", section: "core" },
+    ],
+    []
   );
 
-  function renderMain() {
-    switch (view) {
-      case "Projects":
-        return <ProjectsPage />;
-      case "Health":
-        return <HealthPage />;
-      case "Forecast":
-        return <ForecastPage />;
-      case "EstimatesList":
-      case "EstimateDetail":
-        return <EstimatesPage />;
-      default:
-        // ✅ never render null at app shell level (prevents silent blank pages)
-        return (
-          <div style={{ padding: 16 }}>
-            Unknown view: <code>{String(view)}</code>
-          </div>
-        );
-    }
-  }
+  const [activeKey, setActiveKey] = useState<ViewKey>("dashboard");
+  const activeLabel = navItems.find((n) => n.key === activeKey)?.label ?? "";
 
   return (
-    <div className="appShell">
-      <div className="topBar">
-        <div className="brand">
-          <span className="brandMark" />
-          PEG Portal (PoC)
-          <span className="kicker">API: {API_HOST || "not set"}</span>
+    <div className="app-shell">
+      <Sidebar items={navItems} activeKey={activeKey} onSelect={(k) => setActiveKey(k as ViewKey)} />
+
+      <div className="app-main">
+        <TopBar title={activeLabel} />
+        <div className="app-content">
+          {activeKey === "dashboard" && <DashboardPage />}
+          {activeKey === "projects" && <ProjectsPage />}
+          {activeKey === "estimates" && <EstimatesPage />}
+          {activeKey === "diagnostics" && <DiagnosticsPage />}
         </div>
-
-        <div className="topRight">
-          <button
-            className="ghostBtn"
-            onClick={() => setSidebarCollapsed((v) => !v)}
-            title="Collapse/expand the left navigation"
-          >
-            {sidebarCollapsed ? "Expand Nav" : "Collapse Nav"}
-          </button>
-
-          {isDrawer && (
-            <button
-              className="ghostBtn"
-              onClick={() => setSidebarOpen((v) => !v)}
-              title="Open/close the left navigation"
-            >
-              {sidebarOpen ? "Hide Nav" : "Show Nav"}
-            </button>
-          )}
-
-          <button className="ghostBtn" onClick={() => setView("Health")}>
-            Health
-          </button>
-          <SignOutButton />
-        </div>
-      </div>
-
-      <div className="bodyGrid" style={{ gridTemplateColumns: sidebarOpen ? (sidebarCollapsed ? "64px 1fr" : "260px 1fr") : "1fr" }}>
-        {sidebarOpen && (
-          <div className={`sidebar ${sidebarCollapsed ? "sidebarCollapsed" : ""}`}>
-            <div className="sectionTitle">Forms</div>
-
-            <button
-              className="navBtn"
-              onClick={() => {
-                setArea("Forms");
-                setFormsPage("Projects");
-                setView("Projects");
-              }}
-            >
-              Projects
-            </button>
-
-            <button
-              className="navBtn"
-              onClick={() => {
-                setArea("Forms");
-                setFormsPage("Estimates");
-                setView("EstimatesList");
-              }}
-            >
-              Estimates
-            </button>
-
-            <button
-              className="navBtn"
-              onClick={() => {
-                setArea("Forms");
-                setFormsPage("Forecast");
-                setView("Forecast");
-              }}
-            >
-              Forecast
-            </button>
-
-            <div className="sectionTitle">Ops</div>
-            <button className="navBtn" onClick={() => setView("Health")}>
-              Health & Diagnostics
-            </button>
-          </div>
-        )}
-
-        <div className="main">{renderMain()}</div>
       </div>
     </div>
   );
