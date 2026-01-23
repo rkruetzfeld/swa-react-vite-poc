@@ -40,12 +40,15 @@ jobs:
 
       - name: Validate publish output
         run: |
-          find api_publish -maxdepth 3 -name host.json -print -quit | grep -q host.json
-          test -d api_publish/bin
+          test -f api_publish/host.json
+          test -f api_publish/worker.config.json
+          test -f api_publish/functions.metadata
+          test -f api_publish/Portal_RefCache_Api.dll
+
 
       - name: Deploy to Azure Function App
         uses: Azure/functions-action@v1
         with:
           app-name: "pegportal-api-func-cc-001"
           package: "api_publish"
-          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE }}
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_PEGPORTAL_CC001 }}
