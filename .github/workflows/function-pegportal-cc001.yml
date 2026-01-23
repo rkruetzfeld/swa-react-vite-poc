@@ -1,0 +1,41 @@
+name: Deploy Azure Function App (pegportal-api-func-cc-001)
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "api/Portal.RefCache.Api/**"
+      - ".github/workflows/function-pegportal-cc001.yml"
+  workflow_dispatch:
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      - name: Restore
+        run: dotnet restore api/Portal.RefCache.Api/Portal_RefCache_Api.csproj
+
+      - name: Publish (Function App)
+        run: dotnet publish api/Portal.RefCache.Api/Portal_RefCache_Api.csproj -c Release -o api_publish --no-restore
+
+      # Optional sanity check: fail fast if publish output isn't a Function package root
+      - name: Validate publish output
+        run: |
+          test -f api_publish/host.json
+          test -d api_publish/bin
+
+      - name: Deploy to Azure Function App
+        uses: Azure/functions-action@v1
+        with:
+          app-name: "pegportal-api-func-cc-001"
+          package: "api_publish"
+          publish-profile: ${{ secrets.AZURE_FUNCTIONAPP_PUBLISH_PROFILE_PEGPORTAL_CC001 }}
