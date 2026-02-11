@@ -28,3 +28,8 @@ dist-ssr
 publish/
 publish.zip
 
+
+# junk / accidental files
+cd
+*.docx
+*357200272*
