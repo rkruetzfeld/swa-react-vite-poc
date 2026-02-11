@@ -1,5 +1,6 @@
 import {
   InteractionRequiredAuthError,
+  BrowserAuthError,
   type AccountInfo,
   type IPublicClientApplication,
 } from "@azure/msal-browser";
@@ -7,17 +8,40 @@ import { tokenRequest } from "./msalConfig";
 
 /**
  * Acquire an access token for the configured API scope.
- * Silent first; if interaction is required, redirects.
+ * Silent first.
+ * If interaction required:
+ *   - In iframe => popup
+ *   - Top-level => popup (safer than redirect)
+ *
+ * This prevents redirect_in_iframe errors.
  */
+
+function isInIframe(): boolean {
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
 export async function getAccessTokenOrRedirect(
-pca: IPublicClientApplication, scope: string): Promise<string> {
+  pca: IPublicClientApplication
+): Promise<string> {
   const active = pca.getActiveAccount();
   const accounts = pca.getAllAccounts();
   const account: AccountInfo | undefined = active ?? accounts[0];
 
   if (!account) {
-    pca.loginRedirect(tokenRequest);
-    throw new Error("No account found. Redirecting to login.");
+    // Never redirect automatically inside iframe
+    if (isInIframe()) {
+      const login = await pca.loginPopup(tokenRequest);
+      pca.setActiveAccount(login.account);
+      return getAccessTokenOrRedirect(pca);
+    }
+
+    const login = await pca.loginPopup(tokenRequest);
+    pca.setActiveAccount(login.account);
+    return getAccessTokenOrRedirect(pca);
   }
 
   try {
@@ -31,11 +55,26 @@ pca: IPublicClientApplication, scope: string): Promise<string> {
     }
 
     return resp.accessToken;
-  } catch (e) {
+  } catch (e: any) {
     if (e instanceof InteractionRequiredAuthError) {
-      pca.acquireTokenRedirect({ ...tokenRequest, account });
-      throw new Error("Interaction required. Redirecting.");
+      // 🔒 NEVER redirect in iframe
+      const resp = await pca.acquireTokenPopup({
+        ...tokenRequest,
+        account,
+      });
+
+      return resp.accessToken;
     }
+
+    // Safety net
+    if (e instanceof BrowserAuthError && e.errorCode === "redirect_in_iframe") {
+      const resp = await pca.acquireTokenPopup({
+        ...tokenRequest,
+        account,
+      });
+      return resp.accessToken;
+    }
+
     throw e;
   }
 }
