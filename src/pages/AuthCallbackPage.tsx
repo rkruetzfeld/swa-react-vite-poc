@@ -1,55 +1,28 @@
-<<<<<<< HEAD
-import React from "react";
-import { useMsal } from "@azure/msal-react";
+// src/pages/AuthCallbackPage.tsx
+import { useEffect } from "react";
+import { pca } from "../auth/pca";
 
-/**
- * AuthCallbackPage
- * - Used as the MSAL redirectUri for popup flows.
- * - Processes the auth response and closes the popup (if opened as a popup).
- */
 export default function AuthCallbackPage() {
-  const { instance } = useMsal();
-
-  React.useEffect(() => {
+  useEffect(() => {
     (async () => {
       try {
-        await instance.initialize();
-        await instance.handleRedirectPromise();
-
-        // If this is a popup window, close it after completing auth.
-        if (window.opener) {
-          window.close();
-          return;
-        }
-
-        // Otherwise, return home.
-        window.location.replace("/");
-      } catch (e: any) {
-        // Minimal, readable error in the callback window
-        document.body.innerHTML =
-          '<div style="padding:16px;font-family:Segoe UI, Arial">' +
-          "<h3>Authentication callback error</h3>" +
-          `<pre style="white-space:pre-wrap">${String(e?.message ?? e)}</pre>` +
-          "</div>";
+        // For popup flows, MSAL may still write hash/search response artifacts.
+        // handleRedirectPromise() is safe to call; it will no-op if nothing to process.
+        await pca.handleRedirectPromise();
+      } finally {
+        // Always try to close the popup and notify the opener
+        try {
+          window.opener?.postMessage({ type: "AUTH_POPUP_DONE" }, window.location.origin);
+        } catch {}
+        window.close();
       }
     })();
-  }, [instance]);
+  }, []);
 
-  return <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>Completing sign-in…</div>;
-=======
-// src/pages/AuthCallbackPage.tsx
-// Redirect flow is disabled (popup-only auth).
-// This page should never be used.
-
-export default function AuthCallbackPage() {
   return (
-    <div style={{ padding: 24 }}>
-      <h2>Authentication</h2>
-      <p>
-        This application uses popup-based authentication.
-        Redirect callback is not required.
-      </p>
+    <div style={{ padding: 24, fontFamily: "system-ui, Segoe UI, Arial" }}>
+      <h2 style={{ margin: 0 }}>Signing you in…</h2>
+      <p style={{ opacity: 0.8 }}>You can close this window if it doesn’t close automatically.</p>
     </div>
   );
->>>>>>> restore-ui-b4a1638
 }
