@@ -54,7 +54,7 @@ type DetailsResponse = {
   details: PmwebEstimateDetail[];
 };
 
-export const EstimatesPage: React.FC = () => {
+const EstimatesPage: React.FC = () => {
   const [estimates, setEstimates] = useState<PmwebEstimateHeader[]>([]);
   const [details, setDetails] = useState<PmwebEstimateDetail[]>([]);
   const [selectedEstimate, setSelectedEstimate] = useState<PmwebEstimateHeader | null>(null);

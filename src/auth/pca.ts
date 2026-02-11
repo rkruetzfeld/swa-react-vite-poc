@@ -1,12 +1,10 @@
 // src/auth/pca.ts
+//
+// Single MSAL instance for msal-react.
+// Uses config from msalConfig.ts (keeps env vars consistent with CI).
+
 import { PublicClientApplication, LogLevel } from "@azure/msal-browser";
 import { msalConfig } from "./msalConfig";
-
-/**
- * Single source of truth for MSAL auth config is msalConfig.ts.
- * This avoids env-var drift (e.g., VITE_AAD_CLIENT_ID vs VITE_AAD_SPA_CLIENT_ID)
- * and keeps build/CI consistent.
- */
 
 export const pca = new PublicClientApplication({
   ...msalConfig,

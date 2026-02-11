@@ -3,9 +3,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { useMsal } from "@azure/msal-react";
 import {
   InteractionRequiredAuthError,
+  BrowserAuthError,
   EventType,
   type AuthenticationResult,
 } from "@azure/msal-browser";
+import { loginRequest } from "./msalConfig";
 
 /**
  * AuthGate:
@@ -30,6 +32,21 @@ export default function AuthGate(props: { children: React.ReactNode }) {
     } catch {
       // cross-origin access throws => assume iframe
       return true;
+    }
+  }
+
+  function breakoutToTopLevel(): void {
+    // Best-effort escape: if the host blocks popups, we need a top-level navigation.
+    // Add a marker to avoid repeated breakout attempts.
+    const url = new URL(window.location.href);
+    if (!url.searchParams.has("breakout")) {
+      url.searchParams.set("breakout", "1");
+    }
+
+    try {
+      window.top!.location.assign(url.toString());
+    } catch {
+      window.location.assign(url.toString());
     }
   }
 
@@ -80,17 +97,28 @@ export default function AuthGate(props: { children: React.ReactNode }) {
           return;
         }
 
-        const loginRequest = {
-          scopes: ["openid", "profile", "email"],
-          prompt: "select_account",
-        };
-
         if (isInIframe()) {
           // ✅ iframe-safe
-          const res = await instance.loginPopup(loginRequest);
-          if (res?.account) instance.setActiveAccount(res.account);
-          setReady(true);
-          return;
+          try {
+            const res = await instance.loginPopup(loginRequest);
+            if (res?.account) instance.setActiveAccount(res.account);
+            setReady(true);
+            return;
+          } catch (e: any) {
+            // Popup blocked or disallowed => breakout to top-level
+            const msg = String(e?.message ?? e);
+            const looksBlocked =
+              msg.toLowerCase().includes("popup") ||
+              msg.toLowerCase().includes("block") ||
+              msg.toLowerCase().includes("window");
+
+            if (looksBlocked || e instanceof BrowserAuthError) {
+              breakoutToTopLevel();
+              return; // navigation
+            }
+
+            throw e;
+          }
         }
 
         // ✅ top-level redirect is fine
@@ -101,16 +129,26 @@ export default function AuthGate(props: { children: React.ReactNode }) {
         if (e instanceof InteractionRequiredAuthError) {
           try {
             if (isInIframe()) {
-              const res = await instance.loginPopup({
-                scopes: ["openid", "profile", "email"],
-              });
-              if (res?.account) instance.setActiveAccount(res.account);
-              setReady(true);
-              return;
+              try {
+                const res = await instance.loginPopup(loginRequest);
+                if (res?.account) instance.setActiveAccount(res.account);
+                setReady(true);
+                return;
+              } catch (e3: any) {
+                const msg = String(e3?.message ?? e3);
+                const looksBlocked =
+                  msg.toLowerCase().includes("popup") ||
+                  msg.toLowerCase().includes("block") ||
+                  msg.toLowerCase().includes("window");
+                if (looksBlocked || e3 instanceof BrowserAuthError) {
+                  breakoutToTopLevel();
+                  return;
+                }
+                throw e3;
+              }
             }
-            await instance.loginRedirect({
-              scopes: ["openid", "profile", "email"],
-            });
+
+            await instance.loginRedirect(loginRequest);
             return;
           } catch (e2: any) {
             setError(String(e2?.message ?? e2));

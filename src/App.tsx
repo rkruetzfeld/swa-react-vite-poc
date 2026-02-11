@@ -12,13 +12,14 @@ function TopBar(props: { title: string }) {
   return (
     <div
       style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
         padding: "12px 16px",
         borderBottom: "1px solid rgba(0,0,0,0.08)",
-        fontSize: 16,
-        fontWeight: 600,
       }}
     >
-      {props.title}
+      <div style={{ fontSize: 16, fontWeight: 600 }}>{props.title}</div>
     </div>
   );
 }
@@ -38,11 +39,7 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar
-        items={navItems}
-        activeKey={activeKey}
-        onSelect={(k) => setActiveKey(k as ViewKey)}
-      />
+      <Sidebar items={navItems} activeKey={activeKey} onSelect={(k) => setActiveKey(k as ViewKey)} />
 
       <div className="app-main">
         <TopBar title={activeLabel} />
