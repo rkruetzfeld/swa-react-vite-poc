@@ -1,52 +1,54 @@
 import { useMemo, useState } from "react";
 
-import Sidebar, { type NavItem } from "./components/Sidebar";
+import Sidebar, { type NavId } from "./components/Sidebar";
 
 import DashboardPage from "./pages/DashboardPage";
-import ProjectsPage from "./pages/ProjectsPage";
+import ReportsPage from "./pages/ReportsPage";
 import EstimatesPage from "./pages/EstimatesPage";
+import ForecastPage from "./pages/ForecastPage";
 
-type ViewKey = "dashboard" | "projects" | "estimates";
-
-function TopBar(props: { title: string }) {
+function TopBar({ title }: { title: string }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "space-between",
-        padding: "12px 16px",
-        borderBottom: "1px solid rgba(0,0,0,0.08)",
-      }}
-    >
-      <div style={{ fontSize: 16, fontWeight: 600 }}>{props.title}</div>
+    <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+      <div style={{ fontSize: 16, fontWeight: 600 }}>{title}</div>
     </div>
   );
 }
 
 export default function App() {
-  const navItems: NavItem[] = useMemo(
-    () => [
-      { key: "dashboard", label: "Dashboard", section: "core" },
-      { key: "projects", label: "Projects", section: "data" },
-      { key: "estimates", label: "Estimates", section: "data" },
-    ],
+  const titles: Record<NavId, string> = useMemo(
+    () => ({
+      dashboard: "Dashboard",
+      reports: "Reports",
+      "forms.estimates": "Estimates",
+      "forms.forecast": "Forecast",
+    }),
     []
   );
 
-  const [activeKey, setActiveKey] = useState<ViewKey>("dashboard");
-  const activeLabel = navItems.find((n) => n.key === activeKey)?.label ?? "";
+  const [active, setActive] = useState<NavId>("dashboard");
+  const [pinned, setPinned] = useState<NavId[]>([]);
+
+  const togglePin = (id: NavId) => {
+    setPinned((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
 
   return (
     <div className="app-shell">
-      <Sidebar items={navItems} activeKey={activeKey} onSelect={(k) => setActiveKey(k as ViewKey)} />
+      <Sidebar
+        active={active}
+        pinned={pinned}
+        onNavigate={setActive}
+        onTogglePin={togglePin}
+      />
 
       <div className="app-main">
-        <TopBar title={activeLabel} />
+        <TopBar title={titles[active] ?? ""} />
         <div className="app-content">
-          {activeKey === "dashboard" && <DashboardPage />}
-          {activeKey === "projects" && <ProjectsPage />}
-          {activeKey === "estimates" && <EstimatesPage />}
+          {active === "dashboard" && <DashboardPage />}
+          {active === "reports" && <ReportsPage />}
+          {active === "forms.estimates" && <EstimatesPage />}
+          {active === "forms.forecast" && <ForecastPage />}
         </div>
       </div>
     </div>
