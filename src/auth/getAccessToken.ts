@@ -1,124 +1,79 @@
 // src/auth/getAccessToken.ts
-import type { AccountInfo, AuthenticationResult, PopupRequest } from "@azure/msal-browser";
+import type { AuthenticationResult, PopupRequest, SilentRequest, AccountInfo } from "@azure/msal-browser";
 import { InteractionRequiredAuthError } from "@azure/msal-browser";
 import { pca } from "./pca";
-import { tokenRequest } from "./msalConfig";
+import { loginRequest, tokenRequest } from "./msalConfig";
 
 /**
- * Popup-only token acquisition helper (iframe-safe).
- * - Never calls loginRedirect / acquireTokenRedirect.
- * - Uses acquireTokenSilent when possible.
- * - Falls back to acquireTokenPopup.
+ * Popup-only access token helper.
  *
- * IMPORTANT:
- *  - Popup login requires a user gesture (button click) in many browsers.
- *  - If you call this during app startup without a click, popup may be blocked.
+ * - Never uses redirect flows.
+ * - Ensures active account is set after popup completes.
+ * - Falls back to popup when silent token fails with interaction_required.
  */
-
-export type TokenResult =
-  | { ok: true; accessToken: string; account: AccountInfo | null; fromCache?: boolean }
-  | { ok: false; error: unknown; requiresInteraction?: boolean };
 
 function pickAccount(): AccountInfo | null {
-  const active = pca.getActiveAccount();
-  if (active) return active;
-
-  const all = pca.getAllAccounts();
-  if (all.length > 0) return all[0];
-
-  return null;
+  return pca.getActiveAccount() ?? pca.getAllAccounts()[0] ?? null;
 }
 
-async function trySilent(account: AccountInfo, request: PopupRequest): Promise<AuthenticationResult | null> {
-  try {
-    return await pca.acquireTokenSilent({ ...request, account });
-  } catch (e) {
-    // Interaction required -> caller should popup
-    if (e instanceof InteractionRequiredAuthError) return null;
-    // Some browsers throw generic errors for 3p cookie / iframe issues; treat as interaction-required
-    return null;
+async function loginViaPopup(): Promise<AuthenticationResult> {
+  const req: PopupRequest = { ...loginRequest };
+  const result = await pca.loginPopup(req);
+  if (result.account) {
+    pca.setActiveAccount(result.account);
   }
+  return result;
 }
 
-/**
- * Acquire an access token.
- * Use this inside API client and other calls that need a token.
- *
- * - If user is not signed in: returns {ok:false, requiresInteraction:true}
- * - If silent fails: will attempt popup (ONLY if allowPopup=true)
- */
-export async function getAccessToken(options?: { allowPopup?: boolean }): Promise<TokenResult> {
-  const allowPopup = options?.allowPopup ?? false;
+async function acquireTokenViaPopup(account: AccountInfo): Promise<AuthenticationResult> {
+  const req: PopupRequest = { ...tokenRequest, account };
+  const result = await pca.acquireTokenPopup(req);
+  if (result.account) {
+    pca.setActiveAccount(result.account);
+  }
+  return result;
+}
 
-  const request: PopupRequest = {
-    ...(tokenRequest as PopupRequest),
-  };
+async function acquireTokenSilent(account: AccountInfo): Promise<AuthenticationResult> {
+  const req: SilentRequest = { ...tokenRequest, account };
+  const result = await pca.acquireTokenSilent(req);
+  if (result.account) {
+    pca.setActiveAccount(result.account);
+  }
+  return result;
+}
 
+export async function getAccessTokenOrPopup(): Promise<string> {
   const account = pickAccount();
+
+  // If no account cached, do interactive login via popup.
   if (!account) {
-    // Not signed in yet
-    return { ok: false, error: new Error("No account in cache"), requiresInteraction: true };
+    const loginResult = await loginViaPopup();
+    return loginResult.accessToken || "";
   }
 
-  // Ensure MSAL knows which account is active
-  pca.setActiveAccount(account);
-
-  // 1) Try silent first
-  const silent = await trySilent(account, request);
-  if (silent?.accessToken) {
-    return { ok: true, accessToken: silent.accessToken, account, fromCache: true };
-  }
-
-  // 2) If silent failed and popup is allowed, try popup
-  if (!allowPopup) {
-    return { ok: false, error: new Error("Interaction required"), requiresInteraction: true };
-  }
-
+  // Prefer silent first.
   try {
-    const popupResult = await pca.acquireTokenPopup({ ...request, account });
-    if (popupResult?.account) pca.setActiveAccount(popupResult.account);
-    return { ok: true, accessToken: popupResult.accessToken, account: popupResult.account ?? account, fromCache: false };
-  } catch (e) {
-    return { ok: false, error: e, requiresInteraction: true };
+    const silent = await acquireTokenSilent(account);
+    return silent.accessToken || "";
+  } catch (err: any) {
+    // If user interaction required, do popup token acquisition.
+    const needsInteraction =
+      err instanceof InteractionRequiredAuthError ||
+      (typeof err?.errorCode === "string" && err.errorCode.includes("interaction_required"));
+
+    if (needsInteraction) {
+      const popup = await acquireTokenViaPopup(account);
+      return popup.accessToken || "";
+    }
+
+    // Other errors should surface.
+    throw err;
   }
 }
 
 /**
- * Use this when the user clicks "Sign in" (user gesture).
- * This is the safest way to start auth from inside an iframe.
+ * Back-compat export: some callers still import getAccessTokenOrRedirect.
+ * We are popup-only now, so this is an alias.
  */
-export async function signInWithPopup(): Promise<TokenResult> {
-  const request: PopupRequest = {
-    ...(tokenRequest as PopupRequest),
-  };
-
-  try {
-    const result = await pca.loginPopup(request);
-    if (result?.account) pca.setActiveAccount(result.account);
-
-    // After login, attempt token (silent should succeed)
-    const account = result?.account ?? pickAccount();
-    if (!account) return { ok: false, error: new Error("Login succeeded but no account found") };
-
-    const silent = await trySilent(account, request);
-    if (silent?.accessToken) return { ok: true, accessToken: silent.accessToken, account, fromCache: true };
-
-    // If still no token, try popup token
-    const popupResult = await pca.acquireTokenPopup({ ...request, account });
-    if (popupResult?.account) pca.setActiveAccount(popupResult.account);
-    return { ok: true, accessToken: popupResult.accessToken, account: popupResult.account ?? account, fromCache: false };
-  } catch (e) {
-    return { ok: false, error: e, requiresInteraction: true };
-  }
-}
-
-/**
- * Logout helper
- */
-export async function signOut(): Promise<void> {
-  const account = pickAccount();
-  await pca.logoutPopup({
-    account: account ?? undefined,
-    mainWindowRedirectUri: window.location.origin,
-  });
-}
+export const getAccessTokenOrRedirect = getAccessTokenOrPopup;

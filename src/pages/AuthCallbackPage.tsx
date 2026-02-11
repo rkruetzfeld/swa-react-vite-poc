@@ -1,28 +1,44 @@
 // src/pages/AuthCallbackPage.tsx
-import { useEffect } from "react";
+import React, { useEffect } from "react";
+import { useMsal } from "@azure/msal-react";
 import { pca } from "../auth/pca";
 
+/**
+ * Popup callback page:
+ * - In popup-only mode we don't rely on redirect processing,
+ *   but this page can still be used as a safe landing spot.
+ * - If opened in a popup, it attempts to close itself.
+ */
 export default function AuthCallbackPage() {
+  const { instance } = useMsal();
+
   useEffect(() => {
     (async () => {
       try {
-        // For popup flows, MSAL may still write hash/search response artifacts.
-        // handleRedirectPromise() is safe to call; it will no-op if nothing to process.
-        await pca.handleRedirectPromise();
+        // In case any redirect response exists (defensive), process it.
+        const result = await instance.handleRedirectPromise();
+        if (result?.account) {
+          pca.setActiveAccount(result.account);
+        }
+      } catch {
+        // ignore
       } finally {
-        // Always try to close the popup and notify the opener
+        // If this is a popup window, try to close after a tick.
         try {
-          window.opener?.postMessage({ type: "AUTH_POPUP_DONE" }, window.location.origin);
-        } catch {}
-        window.close();
+          if (window.opener) {
+            setTimeout(() => window.close(), 50);
+          }
+        } catch {
+          // ignore
+        }
       }
     })();
-  }, []);
+  }, [instance]);
 
   return (
-    <div style={{ padding: 24, fontFamily: "system-ui, Segoe UI, Arial" }}>
-      <h2 style={{ margin: 0 }}>Signing you in…</h2>
-      <p style={{ opacity: 0.8 }}>You can close this window if it doesn’t close automatically.</p>
+    <div style={{ padding: 24 }}>
+      <h2>Authentication complete</h2>
+      <p>You can close this window and return to the portal.</p>
     </div>
   );
 }
