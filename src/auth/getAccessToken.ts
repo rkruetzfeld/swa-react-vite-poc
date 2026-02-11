@@ -1,9 +1,12 @@
+// src/auth/getAccessToken.ts
+// Popup-only MSAL token acquisition (iframe safe)
+
 import {
   InteractionRequiredAuthError,
   BrowserAuthError,
   type AccountInfo,
-  type IPublicClientApplication,
 } from "@azure/msal-browser";
+<<<<<<< HEAD
 import { loginRequest, tokenRequest } from "./msalConfig";
 
 /**
@@ -39,11 +42,33 @@ function breakoutToTopLevel(): void {
 export async function getAccessTokenOrRedirect(
   pca: IPublicClientApplication
 ): Promise<string> {
-  const active = pca.getActiveAccount();
-  const accounts = pca.getAllAccounts();
-  const account: AccountInfo | undefined = active ?? accounts[0];
+=======
 
+import { pca } from "./pca";
+import { tokenRequest, loginRequest } from "./msalConfig";
+
+function getActiveAccount(): AccountInfo | null {
+>>>>>>> restore-ui-b4a1638
+  const active = pca.getActiveAccount();
+  if (active) return active;
+
+  const accounts = pca.getAllAccounts();
+  if (accounts.length > 0) {
+    pca.setActiveAccount(accounts[0]);
+    return accounts[0];
+  }
+
+  return null;
+}
+
+export async function getAccessToken(): Promise<string> {
+  await pca.initialize();
+
+  let account = getActiveAccount();
+
+  // If no user signed in, force popup login
   if (!account) {
+<<<<<<< HEAD
     // Never redirect automatically inside iframe
     if (isInIframe()) {
       try {
@@ -67,18 +92,34 @@ export async function getAccessTokenOrRedirect(
     const login = await pca.loginPopup(loginRequest);
     pca.setActiveAccount(login.account);
     return getAccessTokenOrRedirect(pca);
+=======
+    const loginResult = await pca.loginPopup(loginRequest);
+    if (!loginResult.account) {
+      throw new Error("Login failed — no account returned.");
+    }
+    pca.setActiveAccount(loginResult.account);
+    account = loginResult.account;
+>>>>>>> restore-ui-b4a1638
   }
 
   try {
-    const resp = await pca.acquireTokenSilent({
+    const result = await pca.acquireTokenSilent({
       ...tokenRequest,
       account,
     });
 
-    if (!resp.accessToken) {
-      throw new Error("Token response missing accessToken.");
+    return result.accessToken;
+  } catch (err) {
+    if (err instanceof InteractionRequiredAuthError) {
+      const popupResult = await pca.acquireTokenPopup({
+        ...tokenRequest,
+        account,
+      });
+
+      return popupResult.accessToken;
     }
 
+<<<<<<< HEAD
     return resp.accessToken;
   } catch (e: any) {
     if (e instanceof InteractionRequiredAuthError) {
@@ -122,5 +163,8 @@ export async function getAccessTokenOrRedirect(
     }
 
     throw e;
+=======
+    throw err;
+>>>>>>> restore-ui-b4a1638
   }
 }

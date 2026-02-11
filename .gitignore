@@ -29,4 +29,11 @@ publish/
 publish.zip
 
 
+<<<<<<< HEAD
 *.docx
+=======
+# junk / accidental files
+cd
+*.docx
+*357200272*
+>>>>>>> restore-ui-b4a1638

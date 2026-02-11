@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React from "react";
 import { useMsal } from "@azure/msal-react";
 
@@ -35,4 +36,20 @@ export default function AuthCallbackPage() {
   }, [instance]);
 
   return <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>Completing sign-in…</div>;
+=======
+// src/pages/AuthCallbackPage.tsx
+// Redirect flow is disabled (popup-only auth).
+// This page should never be used.
+
+export default function AuthCallbackPage() {
+  return (
+    <div style={{ padding: 24 }}>
+      <h2>Authentication</h2>
+      <p>
+        This application uses popup-based authentication.
+        Redirect callback is not required.
+      </p>
+    </div>
+  );
+>>>>>>> restore-ui-b4a1638
 }
