@@ -1,46 +1,45 @@
-import { Configuration, LogLevel } from "@azure/msal-browser";
+// src/auth/msalConfig.ts
+import type { Configuration } from "@azure/msal-browser";
+
+const tenantId = import.meta.env.VITE_AAD_TENANT_ID as string;
+const clientId = import.meta.env.VITE_AAD_SPA_CLIENT_ID as string;
+const apiScope = import.meta.env.VITE_AAD_API_SCOPE as string;
+
+if (!tenantId) throw new Error("Missing VITE_AAD_TENANT_ID");
+if (!clientId) throw new Error("Missing VITE_AAD_SPA_CLIENT_ID");
+if (!apiScope) throw new Error("Missing VITE_AAD_API_SCOPE");
 
 /**
- * Required Vite env vars:
- *  - VITE_AAD_TENANT_ID
- *  - VITE_AAD_SPA_CLIENT_ID
- *  - VITE_AAD_API_SCOPE  (e.g. api://<api-client-id>/Estimates.ReadWrite)
+ * Dedicated callback route.
+ * This keeps the popup lightweight and avoids rendering the full app in the popup window.
+ *
+ * IMPORTANT: Add this exact URL to Entra App Registration -> Authentication -> Redirect URIs:
+ *   https://<your-domain>/auth-callback
  */
-const tenantId = import.meta.env.VITE_AAD_TENANT_ID as string | undefined;
-const clientId = import.meta.env.VITE_AAD_SPA_CLIENT_ID as string | undefined;
-const apiScope = import.meta.env.VITE_AAD_API_SCOPE as string | undefined;
-
-if (!tenantId || !clientId || !apiScope) {
-  throw new Error(
-    "Missing auth env vars. Set VITE_AAD_TENANT_ID, VITE_AAD_SPA_CLIENT_ID, and VITE_AAD_API_SCOPE."
-  );
-}
+const redirectUri = `${window.location.origin}/auth-callback`;
 
 export const msalConfig: Configuration = {
   auth: {
     clientId,
     authority: `https://login.microsoftonline.com/${tenantId}`,
-    redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
-    navigateToLoginRequestUrl: true,
+    redirectUri,
+    // Avoid "bounce back" loops after auth completes
+    navigateToLoginRequestUrl: false,
   },
   cache: {
+    // More reliable for SPA auth across reloads (including embedded)
     cacheLocation: "localStorage",
     storeAuthStateInCookie: false,
   },
   system: {
-    loggerOptions: {
-      logLevel: LogLevel.Warning,
-      piiLoggingEnabled: false,
-      loggerCallback: (_level, message) => {
-        if (import.meta.env.DEV) console.log(message);
-      },
-    },
+    // Safety: never allow redirect in an iframe
+    allowRedirectInIframe: false,
   },
 };
 
 export const loginRequest = {
-  scopes: [apiScope],
+  scopes: ["openid", "profile", "email"],
+  prompt: "select_account",
 };
 
 export const tokenRequest = {

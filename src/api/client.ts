@@ -1,6 +1,6 @@
 // src/api/client.ts
 import { pca } from "../auth/pca";
-import { getAccessTokenOrRedirect } from "../auth/getAccessToken";
+import { getAccessToken } from "../auth/getAccessToken";
 
 // When calling an external Function App, SWA cookies do NOT apply.
 // Use MSAL bearer tokens when VITE_USE_MSAL=true (recommended for external APIs).
@@ -41,7 +41,7 @@ async function buildAuthHeaders(url: string): Promise<Record<string, string>> {
   if (!USE_MSAL || !scope) return {};
 
   // Acquire token (interactive redirect if needed)
-  const token = await getAccessTokenOrRedirect(pca, scope);
+  const token = await getAccessToken(pca, scope);
   if (!token) return {};
 
   return { Authorization: `Bearer ${token}` };
