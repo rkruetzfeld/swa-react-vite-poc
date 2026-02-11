@@ -4,16 +4,14 @@ import {
   type AccountInfo,
   type IPublicClientApplication,
 } from "@azure/msal-browser";
-import { tokenRequest } from "./msalConfig";
+import { loginRequest, tokenRequest } from "./msalConfig";
 
 /**
  * Acquire an access token for the configured API scope.
  * Silent first.
- * If interaction required:
- *   - In iframe => popup
- *   - Top-level => popup (safer than redirect)
+ * If interaction required: use popup (never redirect) to remain iframe-safe.
  *
- * This prevents redirect_in_iframe errors.
+ * This prevents: BrowserAuthError: redirect_in_iframe
  */
 
 function isInIframe(): boolean {
@@ -33,14 +31,10 @@ export async function getAccessTokenOrRedirect(
 
   if (!account) {
     // Never redirect automatically inside iframe
-    if (isInIframe()) {
-      const login = await pca.loginPopup(tokenRequest);
+    const login = await pca.loginPopup(loginRequest);
+    if (login?.account) {
       pca.setActiveAccount(login.account);
-      return getAccessTokenOrRedirect(pca);
     }
-
-    const login = await pca.loginPopup(tokenRequest);
-    pca.setActiveAccount(login.account);
     return getAccessTokenOrRedirect(pca);
   }
 
@@ -57,16 +51,14 @@ export async function getAccessTokenOrRedirect(
     return resp.accessToken;
   } catch (e: any) {
     if (e instanceof InteractionRequiredAuthError) {
-      // 🔒 NEVER redirect in iframe
       const resp = await pca.acquireTokenPopup({
         ...tokenRequest,
         account,
       });
-
       return resp.accessToken;
     }
 
-    // Safety net
+    // Safety net: never redirect in iframe
     if (e instanceof BrowserAuthError && e.errorCode === "redirect_in_iframe") {
       const resp = await pca.acquireTokenPopup({
         ...tokenRequest,

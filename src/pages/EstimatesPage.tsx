@@ -213,3 +213,5 @@ export const EstimatesPage: React.FC = () => {
     </div>
   );
 };
+
+export default EstimatesPage;

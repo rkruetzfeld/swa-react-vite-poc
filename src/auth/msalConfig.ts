@@ -1,11 +1,6 @@
-﻿import type { Configuration } from "@azure/msal-browser";
+﻿// src/auth/msalConfig.ts
 
-/**
- * Expected env vars (matches your CI):
- * - VITE_AAD_TENANT_ID
- * - VITE_AAD_SPA_CLIENT_ID
- * - VITE_AAD_API_SCOPE
- */
+import type { Configuration } from "@azure/msal-browser";
 
 const tenantId = import.meta.env.VITE_AAD_TENANT_ID as string;
 const clientId = import.meta.env.VITE_AAD_SPA_CLIENT_ID as string;
@@ -28,18 +23,11 @@ export const msalConfig: Configuration = {
   },
 };
 
-/**
- * Login scopes (basic profile).
- * Keep this minimal; API scope is in tokenRequest.
- */
 export const loginRequest = {
   scopes: ["openid", "profile", "email"],
   prompt: "select_account",
 };
 
-/**
- * API token request (what getAccessToken.ts imports).
- */
 export const tokenRequest = {
   scopes: [apiScope],
 };

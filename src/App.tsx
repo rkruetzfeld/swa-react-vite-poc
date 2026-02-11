@@ -6,7 +6,22 @@ import DashboardPage from "./pages/DashboardPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import EstimatesPage from "./pages/EstimatesPage";
 
-type ViewKey = "dashboard" | "projects" | "estimates" | "diagnostics";
+type ViewKey = "dashboard" | "projects" | "estimates";
+
+function TopBar(props: { title: string }) {
+  return (
+    <div
+      style={{
+        padding: "12px 16px",
+        borderBottom: "1px solid rgba(0,0,0,0.08)",
+        fontSize: 16,
+        fontWeight: 600,
+      }}
+    >
+      {props.title}
+    </div>
+  );
+}
 
 export default function App() {
   const navItems: NavItem[] = useMemo(
@@ -23,7 +38,11 @@ export default function App() {
 
   return (
     <div className="app-shell">
-      <Sidebar items={navItems} activeKey={activeKey} onSelect={(k) => setActiveKey(k as ViewKey)} />
+      <Sidebar
+        items={navItems}
+        activeKey={activeKey}
+        onSelect={(k) => setActiveKey(k as ViewKey)}
+      />
 
       <div className="app-main">
         <TopBar title={activeLabel} />
@@ -31,7 +50,6 @@ export default function App() {
           {activeKey === "dashboard" && <DashboardPage />}
           {activeKey === "projects" && <ProjectsPage />}
           {activeKey === "estimates" && <EstimatesPage />}
-          {activeKey === "diagnostics" && <DiagnosticsPage />}
         </div>
       </div>
     </div>
