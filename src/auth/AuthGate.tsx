@@ -1,21 +1,15 @@
+// src/auth/AuthGate.tsx
 import React from "react";
 import { useMsal } from "@azure/msal-react";
+import { EventType, type AuthenticationResult } from "@azure/msal-browser";
 import { loginRequest } from "./msalConfig";
 
 function isInIframe(): boolean {
   try {
-    // frameElement is the most reliable indicator
     return window.self !== window.top || !!window.frameElement;
   } catch {
     return true;
   }
-}
-
-function urlLooksLikeAuthResponse(): boolean {
-  const h = window.location.hash || "";
-  const q = window.location.search || "";
-  // MSAL responses often contain these
-  return /code=|id_token=|access_token=|state=|error=/.test(h) || /code=|state=|error=/.test(q);
 }
 
 function breakoutToTopLevel() {
@@ -27,55 +21,68 @@ function breakoutToTopLevel() {
   }
 }
 
-export default function AuthGate({ children }: { children: React.ReactNode }) {
+export default function AuthGate(props: { children: React.ReactNode }) {
   const { instance, accounts, inProgress } = useMsal();
   const [ready, setReady] = React.useState(false);
-  const [err, setErr] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
+  // Capture successful login and set active account
   React.useEffect(() => {
-    let mounted = true;
-
-    (async () => {
-      try {
-        await instance.initialize();
-
-        // Only process redirect responses if the URL looks like one.
-        // Prevents "Signing you in..." hang in embedded contexts.
-        if (urlLooksLikeAuthResponse()) {
-          await instance.handleRedirectPromise();
-        }
-
-        const acct =
-          instance.getActiveAccount() ??
-          accounts[0] ??
-          instance.getAllAccounts()[0] ??
-          null;
-
-        if (acct) instance.setActiveAccount(acct);
-
-        if (mounted) setReady(true);
-      } catch (e: any) {
-        if (mounted) setErr(String(e?.message ?? e));
+    const cbId = instance.addEventCallback((event) => {
+      if (
+        event.eventType === EventType.LOGIN_SUCCESS &&
+        event.payload &&
+        (event.payload as AuthenticationResult).account
+      ) {
+        const acct = (event.payload as AuthenticationResult).account!;
+        instance.setActiveAccount(acct);
       }
-    })();
+    });
 
     return () => {
-      mounted = false;
+      if (cbId) instance.removeEventCallback(cbId);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [instance]);
 
-  const active =
-    instance.getActiveAccount() ??
-    accounts[0] ??
-    instance.getAllAccounts()[0] ??
-    null;
+  // Mark ready once we have an account
+  React.useEffect(() => {
+    const acct =
+      instance.getActiveAccount() ?? accounts[0] ?? instance.getAllAccounts()[0] ?? null;
+    if (acct) {
+      instance.setActiveAccount(acct);
+      setReady(true);
+    } else {
+      setReady(true);
+    }
+  }, [accounts, instance]);
 
-  if (err) {
+  const active =
+    instance.getActiveAccount() ?? accounts[0] ?? instance.getAllAccounts()[0] ?? null;
+
+  const signIn = async () => {
+    setError(null);
+    try {
+      // Popup works in iframe + top-level, and avoids redirect-in-iframe.
+      const res = await instance.loginPopup(loginRequest);
+      if (res?.account) instance.setActiveAccount(res.account);
+    } catch (e: any) {
+      const msg = String(e?.message ?? e);
+
+      // If popup fails in iframe, offer breakout fallback
+      if (isInIframe() && msg.toLowerCase().includes("popup")) {
+        breakoutToTopLevel();
+        return;
+      }
+
+      setError(msg);
+    }
+  };
+
+  if (error) {
     return (
       <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
         <h3>Authentication error</h3>
-        <pre style={{ whiteSpace: "pre-wrap" }}>{err}</pre>
+        <pre style={{ whiteSpace: "pre-wrap" }}>{error}</pre>
         {isInIframe() && (
           <button
             onClick={breakoutToTopLevel}
@@ -89,54 +96,30 @@ export default function AuthGate({ children }: { children: React.ReactNode }) {
   }
 
   if (!ready) {
-    return (
-      <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
-        Signing you in...
-      </div>
-    );
+    return <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>Signing you in…</div>;
   }
 
   if (active) {
-    return <>{children}</>;
+    return <>{props.children}</>;
   }
-
-  const signInPopup = async () => {
-    setErr(null);
-    try {
-      // Must be directly user-initiated to avoid popup blocking
-      const res = await instance.loginPopup(loginRequest);
-      if (res?.account) instance.setActiveAccount(res.account);
-    } catch (e: any) {
-      const msg = String(e?.message ?? e);
-      setErr(msg);
-    }
-  };
 
   return (
     <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
       <div style={{ marginBottom: 10 }}>You’re not signed in.</div>
-
       <button
-        onClick={signInPopup}
+        onClick={signIn}
         disabled={inProgress !== "none"}
         style={{ padding: "10px 14px", cursor: "pointer" }}
       >
-        Sign in (popup)
+        Sign in
       </button>
-
       {isInIframe() && (
-        <>
-          <div style={{ marginTop: 10, opacity: 0.8, fontSize: 13 }}>
-            If the popup completes but the iframe can’t finalize sign-in, open
-            the portal top-level and sign in there.
-          </div>
-          <button
-            onClick={breakoutToTopLevel}
-            style={{ padding: "10px 14px", marginTop: 12, cursor: "pointer" }}
-          >
-            Open in a new window
-          </button>
-        </>
+        <button
+          onClick={breakoutToTopLevel}
+          style={{ padding: "10px 14px", marginTop: 12, marginLeft: 8, cursor: "pointer" }}
+        >
+          Open in a new window
+        </button>
       )}
     </div>
   );

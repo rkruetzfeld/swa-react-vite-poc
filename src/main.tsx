@@ -14,35 +14,38 @@ import { ModuleRegistry, AllCommunityModule } from "ag-grid-community";
 ModuleRegistry.registerModules([AllCommunityModule]);
 
 import App from "./App.tsx";
+import AuthCallbackPage from "./pages/AuthCallbackPage";
 import "./index.css";
 
 async function bootstrap() {
-  // ✅ MSAL v3+: must initialize before any other MSAL calls
+  // MSAL v3+: must initialize before any MSAL calls
   await pca.initialize();
+
+  const isAuthCallback = window.location.pathname === "/auth-callback";
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <MsalProvider instance={pca}>
-        <AuthGate>
-          <App />
-        </AuthGate>
+        {isAuthCallback ? (
+          <AuthCallbackPage />
+        ) : (
+          <AuthGate>
+            <App />
+          </AuthGate>
+        )}
       </MsalProvider>
     </React.StrictMode>
   );
 }
 
 bootstrap().catch((err) => {
-  // If init fails, show a readable error
-  // (Avoids blank screen)
   const el = document.getElementById("root");
   if (el) {
     el.innerHTML =
       `<div style="padding:16px;font-family:Segoe UI, Arial">` +
       `<h3>Authentication bootstrap error</h3>` +
-      `<pre style="white-space:pre-wrap">${String(err?.message ?? err)}</pre>` +
+      `<pre style="white-space:pre-wrap">${String((err as any)?.message ?? err)}</pre>` +
       `</div>`;
   }
-  // Also log to console for debugging
-  // eslint-disable-next-line no-console
   console.error(err);
 });
