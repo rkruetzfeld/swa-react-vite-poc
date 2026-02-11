@@ -1,48 +1,45 @@
-import { Configuration, LogLevel } from "@azure/msal-browser";
+﻿import type { Configuration } from "@azure/msal-browser";
 
 /**
- * Required Vite env vars:
- *  - VITE_AAD_TENANT_ID
- *  - VITE_AAD_SPA_CLIENT_ID
- *  - VITE_AAD_API_SCOPE  (e.g. api://<api-client-id>/Estimates.ReadWrite)
+ * Expected env vars (matches your CI):
+ * - VITE_AAD_TENANT_ID
+ * - VITE_AAD_SPA_CLIENT_ID
+ * - VITE_AAD_API_SCOPE
  */
-const tenantId = import.meta.env.VITE_AAD_TENANT_ID as string | undefined;
-const clientId = import.meta.env.VITE_AAD_SPA_CLIENT_ID as string | undefined;
-const apiScope = import.meta.env.VITE_AAD_API_SCOPE as string | undefined;
 
-if (!tenantId || !clientId || !apiScope) {
-  throw new Error(
-    "Missing auth env vars. Set VITE_AAD_TENANT_ID, VITE_AAD_SPA_CLIENT_ID, and VITE_AAD_API_SCOPE."
-  );
-}
+const tenantId = import.meta.env.VITE_AAD_TENANT_ID as string;
+const clientId = import.meta.env.VITE_AAD_SPA_CLIENT_ID as string;
+const apiScope = import.meta.env.VITE_AAD_API_SCOPE as string;
+
+if (!tenantId) throw new Error("Missing VITE_AAD_TENANT_ID");
+if (!clientId) throw new Error("Missing VITE_AAD_SPA_CLIENT_ID");
+if (!apiScope) throw new Error("Missing VITE_AAD_API_SCOPE");
 
 export const msalConfig: Configuration = {
   auth: {
     clientId,
     authority: `https://login.microsoftonline.com/${tenantId}`,
     redirectUri: window.location.origin,
-    postLogoutRedirectUri: window.location.origin,
     navigateToLoginRequestUrl: true,
   },
   cache: {
     cacheLocation: "localStorage",
     storeAuthStateInCookie: false,
   },
-  system: {
-    loggerOptions: {
-      logLevel: LogLevel.Warning,
-      piiLoggingEnabled: false,
-      loggerCallback: (_level, message) => {
-        if (import.meta.env.DEV) console.log(message);
-      },
-    },
-  },
 };
 
+/**
+ * Login scopes (basic profile).
+ * Keep this minimal; API scope is in tokenRequest.
+ */
 export const loginRequest = {
-  scopes: [apiScope],
+  scopes: ["openid", "profile", "email"],
+  prompt: "select_account",
 };
 
+/**
+ * API token request (what getAccessToken.ts imports).
+ */
 export const tokenRequest = {
   scopes: [apiScope],
 };
