@@ -5,7 +5,6 @@ import Sidebar, { type NavItem } from "./components/Sidebar";
 import DashboardPage from "./pages/DashboardPage";
 import ProjectsPage from "./pages/ProjectsPage";
 import EstimatesPage from "./pages/EstimatesPage";
-import DiagnosticsPage from "./pages/DiagnosticsPage";
 
 type ViewKey = "dashboard" | "projects" | "estimates" | "diagnostics";
 
@@ -15,7 +14,6 @@ export default function App() {
       { key: "dashboard", label: "Dashboard", section: "core" },
       { key: "projects", label: "Projects", section: "data" },
       { key: "estimates", label: "Estimates", section: "data" },
-      { key: "diagnostics", label: "Diagnostics", section: "core" },
     ],
     []
   );
