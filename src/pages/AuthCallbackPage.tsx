@@ -1,55 +1,43 @@
 import React from "react";
 
 /**
+ * This route exists only for backwards compatibility.
+ *
  * IMPORTANT:
- * This app uses **popup-only** auth (loginPopup / acquireTokenPopup).
+ * - Do NOT call handleRedirectPromise() here.
+ * - Do NOT manipulate window.location.hash.
  *
- * The popup flow does NOT need handleRedirectPromise().
- * Calling handleRedirectPromise() here causes MSAL to try to process the
- * popup response as a "redirect" response and can throw:
- *   no_token_request_cache_error
- *
- * This page is only a friendly landing page for the popup redirectUri.
+ * For popup auth, MSAL (in the opener window) watches the popup URL and processes the
+ * response itself. Rendering the full SPA (or calling redirect handlers) here can break
+ * the popup handshake and trigger `no_token_request_cache_error`.
  */
 export default function AuthCallbackPage() {
-  const [canClose, setCanClose] = React.useState(true);
-
   React.useEffect(() => {
-    // Try to close quickly (works in most popup scenarios)
+    try {
+      // Best-effort: notify opener that we reached the callback page.
+      if (window.opener && !window.opener.closed) {
+        window.opener.postMessage({ type: "msal:popup:callback-reached" }, window.location.origin);
+      }
+    } catch {
+      // ignore
+    }
+
+    // Give MSAL a moment to finish its polling/processing, then close.
     const t = window.setTimeout(() => {
       try {
         window.close();
       } catch {
         // ignore
       }
-      // If still open after attempting to close, show the button.
-      window.setTimeout(() => {
-        if (!window.closed) setCanClose(false);
-      }, 250);
-    }, 100);
+    }, 750);
 
     return () => window.clearTimeout(t);
   }, []);
 
   return (
     <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
-      <h3>Authentication complete</h3>
+      <h2>Authentication complete</h2>
       <div>You can close this window and return to the portal.</div>
-
-      {!canClose && (
-        <button
-          onClick={() => {
-            try {
-              window.close();
-            } catch {
-              // ignore
-            }
-          }}
-          style={{ padding: "10px 14px", marginTop: 12, cursor: "pointer" }}
-        >
-          Close window
-        </button>
-      )}
     </div>
   );
 }

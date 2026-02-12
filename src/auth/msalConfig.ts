@@ -10,13 +10,16 @@ if (!clientId) throw new Error("Missing VITE_AAD_SPA_CLIENT_ID");
 if (!apiScope) throw new Error("Missing VITE_AAD_API_SCOPE");
 
 /**
- * Dedicated callback route.
- * This keeps the popup lightweight and avoids rendering the full app in the popup window.
+ * For **popup** auth, keep redirectUri at the app origin.
  *
- * IMPORTANT: Add this exact URL to Entra App Registration -> Authentication -> Redirect URIs:
- *   https://<your-domain>/auth-callback
+ * Why: if redirectUri points to a SPA route that boots React and calls handleRedirectPromise(),
+ * the popup response processing can race/consume MSAL cache and trigger:
+ *   no_token_request_cache_error
+ *
+ * If you want a dedicated callback page, it must be a minimal static page (no React, no MSAL calls)
+ * and you must not call handleRedirectPromise() anywhere for popup-only flows.
  */
-const redirectUri = `${window.location.origin}/auth-callback`;
+const redirectUri = window.location.origin;
 
 export const msalConfig: Configuration = {
   auth: {
