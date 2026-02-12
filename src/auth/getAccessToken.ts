@@ -1,79 +1,68 @@
 // src/auth/getAccessToken.ts
-import type { AuthenticationResult, PopupRequest, SilentRequest, AccountInfo } from "@azure/msal-browser";
-import { InteractionRequiredAuthError } from "@azure/msal-browser";
-import { pca } from "./pca";
-import { loginRequest, tokenRequest } from "./msalConfig";
+import {
+  InteractionRequiredAuthError,
+  type AccountInfo,
+  type PublicClientApplication,
+} from "@azure/msal-browser";
+import { loginRequest } from "./msalConfig";
+
+function pickAccount(instance: PublicClientApplication): AccountInfo | null {
+  return (
+    instance.getActiveAccount() ??
+    instance.getAllAccounts()[0] ??
+    null
+  );
+}
 
 /**
- * Popup-only access token helper.
- *
- * - Never uses redirect flows.
- * - Ensures active account is set after popup completes.
- * - Falls back to popup when silent token fails with interaction_required.
+ * Ensures a user is signed in.
+ * Uses loginPopup so the SPA does not leave the current page.
  */
+export async function ensureSignedIn(
+  instance: PublicClientApplication
+): Promise<AccountInfo> {
+  const existing = pickAccount(instance);
+  if (existing) return existing;
 
-function pickAccount(): AccountInfo | null {
-  return pca.getActiveAccount() ?? pca.getAllAccounts()[0] ?? null;
+  const result = await instance.loginPopup(loginRequest);
+  if (result?.account) {
+    instance.setActiveAccount(result.account);
+    return result.account;
+  }
+  const acct = pickAccount(instance);
+  if (!acct) {
+    throw new Error("Login completed but no account was found in cache.");
+  }
+  instance.setActiveAccount(acct);
+  return acct;
 }
 
-async function loginViaPopup(): Promise<AuthenticationResult> {
-  const req: PopupRequest = { ...loginRequest };
-  const result = await pca.loginPopup(req);
-  if (result.account) {
-    pca.setActiveAccount(result.account);
-  }
-  return result;
-}
+/**
+ * Acquire an access token for the configured API scope.
+ * Falls back to popup interaction if silent fails.
+ */
+export async function getAccessToken(
+  instance: PublicClientApplication,
+  scope: string
+): Promise<string> {
+  const account = await ensureSignedIn(instance);
 
-async function acquireTokenViaPopup(account: AccountInfo): Promise<AuthenticationResult> {
-  const req: PopupRequest = { ...tokenRequest, account };
-  const result = await pca.acquireTokenPopup(req);
-  if (result.account) {
-    pca.setActiveAccount(result.account);
-  }
-  return result;
-}
-
-async function acquireTokenSilent(account: AccountInfo): Promise<AuthenticationResult> {
-  const req: SilentRequest = { ...tokenRequest, account };
-  const result = await pca.acquireTokenSilent(req);
-  if (result.account) {
-    pca.setActiveAccount(result.account);
-  }
-  return result;
-}
-
-export async function getAccessTokenOrPopup(): Promise<string> {
-  const account = pickAccount();
-
-  // If no account cached, do interactive login via popup.
-  if (!account) {
-    const loginResult = await loginViaPopup();
-    return loginResult.accessToken || "";
-  }
-
-  // Prefer silent first.
   try {
-    const silent = await acquireTokenSilent(account);
-    return silent.accessToken || "";
-  } catch (err: any) {
-    // If user interaction required, do popup token acquisition.
-    const needsInteraction =
-      err instanceof InteractionRequiredAuthError ||
-      (typeof err?.errorCode === "string" && err.errorCode.includes("interaction_required"));
-
-    if (needsInteraction) {
-      const popup = await acquireTokenViaPopup(account);
-      return popup.accessToken || "";
+    const res = await instance.acquireTokenSilent({
+      account,
+      scopes: [scope],
+    });
+    return res.accessToken;
+  } catch (e) {
+    // Typical when first consent or conditional access requires interaction
+    if (e instanceof InteractionRequiredAuthError) {
+      const res = await instance.acquireTokenPopup({
+        account,
+        scopes: [scope],
+      });
+      if (res?.account) instance.setActiveAccount(res.account);
+      return res.accessToken;
     }
-
-    // Other errors should surface.
-    throw err;
+    throw e;
   }
 }
-
-/**
- * Back-compat export: some callers still import getAccessTokenOrRedirect.
- * We are popup-only now, so this is an alias.
- */
-export const getAccessTokenOrRedirect = getAccessTokenOrPopup;

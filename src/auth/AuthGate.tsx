@@ -1,7 +1,12 @@
 // src/auth/AuthGate.tsx
 import React from "react";
 import { useMsal } from "@azure/msal-react";
-import { EventType, type AuthenticationResult } from "@azure/msal-browser";
+import {
+  EventType,
+  InteractionStatus,
+  type AuthenticationResult,
+  type AccountInfo,
+} from "@azure/msal-browser";
 import { loginRequest } from "./msalConfig";
 
 function isInIframe(): boolean {
@@ -21,21 +26,37 @@ function breakoutToTopLevel() {
   }
 }
 
+function pickAccount(instance: { getActiveAccount: () => AccountInfo | null; getAllAccounts: () => AccountInfo[] }, accounts: AccountInfo[]) {
+  return instance.getActiveAccount() ?? accounts[0] ?? instance.getAllAccounts()[0] ?? null;
+}
+
 export default function AuthGate(props: { children: React.ReactNode }) {
   const { instance, accounts, inProgress } = useMsal();
+
+  // Simple rerender trigger when auth state changes outside of React (popup, storage updates, etc.)
+  const [, bump] = React.useReducer((n) => n + 1, 0);
+
   const [ready, setReady] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Capture successful login and set active account
+  // 1) Keep active account set whenever we discover one
+  React.useEffect(() => {
+    const acct = pickAccount(instance, accounts);
+    if (acct) instance.setActiveAccount(acct);
+    setReady(true);
+  }, [accounts, instance]);
+
+  // 2) MSAL event callbacks (login/token success) => set active account + rerender
   React.useEffect(() => {
     const cbId = instance.addEventCallback((event) => {
       if (
-        event.eventType === EventType.LOGIN_SUCCESS &&
-        event.payload &&
-        (event.payload as AuthenticationResult).account
+        (event.eventType === EventType.LOGIN_SUCCESS ||
+          event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS) &&
+        event.payload
       ) {
-        const acct = (event.payload as AuthenticationResult).account!;
-        instance.setActiveAccount(acct);
+        const payload = event.payload as AuthenticationResult;
+        if (payload.account) instance.setActiveAccount(payload.account);
+        bump();
       }
     });
 
@@ -44,37 +65,41 @@ export default function AuthGate(props: { children: React.ReactNode }) {
     };
   }, [instance]);
 
-  // Mark ready once we have an account
+  // 3) Popup completion page posts a message back to the opener.
+  //    This is the most reliable way to flip the UI immediately.
   React.useEffect(() => {
-    const acct =
-      instance.getActiveAccount() ?? accounts[0] ?? instance.getAllAccounts()[0] ?? null;
-    if (acct) {
-      instance.setActiveAccount(acct);
-      setReady(true);
-    } else {
-      setReady(true);
-    }
+    const onMessage = (ev: MessageEvent) => {
+      if (ev.origin !== window.location.origin) return;
+      if (!ev.data || typeof ev.data !== "object") return;
+      const data = ev.data as { type?: string };
+      if (data.type !== "msal:auth:complete") return;
+
+      const acct = pickAccount(instance, accounts);
+      if (acct) instance.setActiveAccount(acct);
+      bump();
+    };
+
+    window.addEventListener("message", onMessage);
+    return () => window.removeEventListener("message", onMessage);
   }, [accounts, instance]);
 
-  const active =
-    instance.getActiveAccount() ?? accounts[0] ?? instance.getAllAccounts()[0] ?? null;
+  const active = pickAccount(instance, accounts);
 
   const signIn = async () => {
-    setError(null);
     try {
-      // Popup works in iframe + top-level, and avoids redirect-in-iframe.
-      const res = await instance.loginPopup(loginRequest);
-      if (res?.account) instance.setActiveAccount(res.account);
-    } catch (e: any) {
-      const msg = String(e?.message ?? e);
+      setError(null);
 
-      // If popup fails in iframe, offer breakout fallback
-      if (isInIframe() && msg.toLowerCase().includes("popup")) {
-        breakoutToTopLevel();
-        return;
+      // Avoid multiple overlapping popups.
+      if (inProgress !== InteractionStatus.None && inProgress !== "none") return;
+
+      const result = await instance.loginPopup(loginRequest);
+      if (result?.account) {
+        instance.setActiveAccount(result.account);
       }
-
-      setError(msg);
+      bump();
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message ?? String(e));
     }
   };
 
@@ -83,10 +108,18 @@ export default function AuthGate(props: { children: React.ReactNode }) {
       <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
         <h3>Authentication error</h3>
         <pre style={{ whiteSpace: "pre-wrap" }}>{error}</pre>
+        {!active && (
+          <button
+            onClick={signIn}
+            style={{ padding: "10px 14px", marginTop: 12, cursor: "pointer" }}
+          >
+            Try sign in again
+          </button>
+        )}
         {isInIframe() && (
           <button
             onClick={breakoutToTopLevel}
-            style={{ padding: "10px 14px", marginTop: 12, cursor: "pointer" }}
+            style={{ padding: "10px 14px", marginTop: 12, marginLeft: 8, cursor: "pointer" }}
           >
             Open in a new window
           </button>
@@ -108,7 +141,7 @@ export default function AuthGate(props: { children: React.ReactNode }) {
       <div style={{ marginBottom: 10 }}>You’re not signed in.</div>
       <button
         onClick={signIn}
-        disabled={inProgress !== "none"}
+        disabled={inProgress !== InteractionStatus.None && inProgress !== "none"}
         style={{ padding: "10px 14px", cursor: "pointer" }}
       >
         Sign in
