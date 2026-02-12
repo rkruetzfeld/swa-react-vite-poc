@@ -23,6 +23,17 @@ async function bootstrap() {
 
   const isAuthCallback = window.location.pathname === "/auth-callback";
 
+  // Important: in the main window, run handleRedirectPromise() once so
+  // msal-react transitions out of InteractionStatus.Startup.
+  // On the popup callback route, skip this to avoid request-cache errors.
+  if (!isAuthCallback) {
+    try {
+      await pca.handleRedirectPromise();
+    } catch {
+      // ignore
+    }
+  }
+
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
       <MsalProvider instance={pca}>
