@@ -1,68 +1,55 @@
 // src/auth/getAccessToken.ts
-import {
-  InteractionRequiredAuthError,
-  type AccountInfo,
-  type PublicClientApplication,
-} from "@azure/msal-browser";
-import { loginRequest } from "./msalConfig";
+import { PublicClientApplication } from "@azure/msal-browser";
+import { msalConfig, loginRequest } from "./msalConfig";
 
-function pickAccount(instance: PublicClientApplication): AccountInfo | null {
-  return (
-    instance.getActiveAccount() ??
-    instance.getAllAccounts()[0] ??
-    null
-  );
+let pca: PublicClientApplication | null = null;
+
+function getPca(): PublicClientApplication {
+  if (!pca) {
+    pca = new PublicClientApplication(msalConfig);
+  }
+  return pca;
 }
 
-/**
- * Ensures a user is signed in.
- * Uses loginPopup so the SPA does not leave the current page.
- */
-export async function ensureSignedIn(
-  instance: PublicClientApplication
-): Promise<AccountInfo> {
-  const existing = pickAccount(instance);
-  if (existing) return existing;
+export async function ensureSignedIn() {
+  const instance = getPca();
+
+  const accounts = instance.getAllAccounts();
+  if (accounts.length > 0) {
+    instance.setActiveAccount(accounts[0]);
+    return accounts[0];
+  }
 
   const result = await instance.loginPopup(loginRequest);
-  if (result?.account) {
+
+  if (result.account) {
     instance.setActiveAccount(result.account);
     return result.account;
   }
-  const acct = pickAccount(instance);
-  if (!acct) {
-    throw new Error("Login completed but no account was found in cache.");
-  }
-  instance.setActiveAccount(acct);
-  return acct;
+
+  throw new Error("Login succeeded but no account returned.");
 }
 
-/**
- * Acquire an access token for the configured API scope.
- * Falls back to popup interaction if silent fails.
- */
-export async function getAccessToken(
-  instance: PublicClientApplication,
-  scope: string
-): Promise<string> {
-  const account = await ensureSignedIn(instance);
+export async function getAccessToken(): Promise<string> {
+  const instance = getPca();
+
+  let account =
+    instance.getActiveAccount() ?? instance.getAllAccounts()[0];
+
+  if (!account) {
+    account = await ensureSignedIn();
+  }
 
   try {
-    const res = await instance.acquireTokenSilent({
+    const response = await instance.acquireTokenSilent({
+      ...loginRequest,
       account,
-      scopes: [scope],
     });
-    return res.accessToken;
-  } catch (e) {
-    // Typical when first consent or conditional access requires interaction
-    if (e instanceof InteractionRequiredAuthError) {
-      const res = await instance.acquireTokenPopup({
-        account,
-        scopes: [scope],
-      });
-      if (res?.account) instance.setActiveAccount(res.account);
-      return res.accessToken;
-    }
-    throw e;
+
+    return response.accessToken;
+  } catch {
+    const response = await instance.acquireTokenPopup(loginRequest);
+    instance.setActiveAccount(response.account!);
+    return response.accessToken;
   }
 }
