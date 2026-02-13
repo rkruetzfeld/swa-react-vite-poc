@@ -1,55 +1,59 @@
-// src/auth/getAccessToken.ts
-import { PublicClientApplication } from "@azure/msal-browser";
-import { msalConfig, loginRequest } from "./msalConfig";
+import {
+  type AccountInfo,
+  InteractionRequiredAuthError,
+  type PublicClientApplication,
+} from "@azure/msal-browser";
+import { loginRequest } from "./msalConfig";
 
-let pca: PublicClientApplication | null = null;
-
-function getPca(): PublicClientApplication {
-  if (!pca) {
-    pca = new PublicClientApplication(msalConfig);
-  }
-  return pca;
+function chooseAccount(instance: PublicClientApplication): AccountInfo | null {
+  return instance.getActiveAccount() ?? instance.getAllAccounts()[0] ?? null;
 }
 
-export async function ensureSignedIn() {
-  const instance = getPca();
-
-  const accounts = instance.getAllAccounts();
-  if (accounts.length > 0) {
-    instance.setActiveAccount(accounts[0]);
-    return accounts[0];
+/**
+ * Ensure we have an interactive session and an active MSAL account.
+ * Popup-only. Uses the static popup redirect page (/auth-popup.html).
+ */
+export async function ensureSignedIn(instance: PublicClientApplication): Promise<AccountInfo> {
+  const existing = chooseAccount(instance);
+  if (existing) {
+    instance.setActiveAccount(existing);
+    return existing;
   }
 
-  const result = await instance.loginPopup(loginRequest);
+  const result = await instance.loginPopup({
+    ...loginRequest,
+    redirectUri: `${window.location.origin}/auth-popup.html`,
+  });
 
-  if (result.account) {
-    instance.setActiveAccount(result.account);
-    return result.account;
+  if (!result.account) {
+    throw new Error("Login completed but MSAL did not return an account.");
   }
 
-  throw new Error("Login succeeded but no account returned.");
+  instance.setActiveAccount(result.account);
+  return result.account;
 }
 
-export async function getAccessToken(): Promise<string> {
-  const instance = getPca();
-
-  let account =
-    instance.getActiveAccount() ?? instance.getAllAccounts()[0];
-
-  if (!account) {
-    account = await ensureSignedIn();
-  }
+/**
+ * Returns an access token for API calls. Falls back to popup if user interaction is required.
+ */
+export async function getAccessToken(instance: PublicClientApplication): Promise<string> {
+  const account = await ensureSignedIn(instance);
 
   try {
-    const response = await instance.acquireTokenSilent({
+    const silent = await instance.acquireTokenSilent({
       ...loginRequest,
       account,
     });
-
-    return response.accessToken;
-  } catch {
-    const response = await instance.acquireTokenPopup(loginRequest);
-    instance.setActiveAccount(response.account!);
-    return response.accessToken;
+    return silent.accessToken;
+  } catch (e) {
+    if (e instanceof InteractionRequiredAuthError) {
+      const interactive = await instance.acquireTokenPopup({
+        ...loginRequest,
+        account,
+        redirectUri: `${window.location.origin}/auth-popup.html`,
+      });
+      return interactive.accessToken;
+    }
+    throw e;
   }
 }

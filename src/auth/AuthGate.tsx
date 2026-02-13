@@ -1,12 +1,7 @@
 // src/auth/AuthGate.tsx
 import React from "react";
 import { useMsal } from "@azure/msal-react";
-import {
-  EventType,
-  InteractionStatus,
-  type AuthenticationResult,
-  type AccountInfo,
-} from "@azure/msal-browser";
+import { InteractionStatus, type AccountInfo } from "@azure/msal-browser";
 import { loginRequest } from "./msalConfig";
 
 function isInIframe(): boolean {
@@ -33,9 +28,6 @@ function pickAccount(instance: { getActiveAccount: () => AccountInfo | null; get
 export default function AuthGate(props: { children: React.ReactNode }) {
   const { instance, accounts, inProgress } = useMsal();
 
-  // Simple rerender trigger when auth state changes outside of React (popup, storage updates, etc.)
-  const [, bump] = React.useReducer((n) => n + 1, 0);
-
   const [ready, setReady] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
@@ -44,43 +36,6 @@ export default function AuthGate(props: { children: React.ReactNode }) {
     const acct = pickAccount(instance, accounts);
     if (acct) instance.setActiveAccount(acct);
     setReady(true);
-  }, [accounts, instance]);
-
-  // 2) MSAL event callbacks (login/token success) => set active account + rerender
-  React.useEffect(() => {
-    const cbId = instance.addEventCallback((event) => {
-      if (
-        (event.eventType === EventType.LOGIN_SUCCESS ||
-          event.eventType === EventType.ACQUIRE_TOKEN_SUCCESS) &&
-        event.payload
-      ) {
-        const payload = event.payload as AuthenticationResult;
-        if (payload.account) instance.setActiveAccount(payload.account);
-        bump();
-      }
-    });
-
-    return () => {
-      if (cbId) instance.removeEventCallback(cbId);
-    };
-  }, [instance]);
-
-  // 3) Popup completion page posts a message back to the opener.
-  //    This is the most reliable way to flip the UI immediately.
-  React.useEffect(() => {
-    const onMessage = (ev: MessageEvent) => {
-      if (ev.origin !== window.location.origin) return;
-      if (!ev.data || typeof ev.data !== "object") return;
-      const data = ev.data as { type?: string };
-      if (data.type !== "msal:auth:complete") return;
-
-      const acct = pickAccount(instance, accounts);
-      if (acct) instance.setActiveAccount(acct);
-      bump();
-    };
-
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
   }, [accounts, instance]);
 
   const active = pickAccount(instance, accounts);
@@ -92,11 +47,21 @@ export default function AuthGate(props: { children: React.ReactNode }) {
       // Avoid multiple overlapping popups.
       if (inProgress !== InteractionStatus.None && inProgress !== "none") return;
 
-      const result = await instance.loginPopup(loginRequest);
-      if (result?.account) {
-        instance.setActiveAccount(result.account);
-      }
-      bump();
+      // IMPORTANT:
+      // Use a *static* popup redirect page that does not run the SPA/router.
+      // This prevents MSAL's popup response from being consumed/rewritten by React Router.
+      const popupRedirectUri = `${window.location.origin}/auth-popup.html`;
+
+      const result = await instance.loginPopup({
+        ...loginRequest,
+        redirectUri: popupRedirectUri,
+      });
+
+      if (result?.account) instance.setActiveAccount(result.account);
+
+      // Force a hard refresh so `useMsal()` rehydrates accounts cleanly.
+      // (This avoids the "popup closed but UI still says signed-out" loop.)
+      window.location.reload();
     } catch (e: any) {
       console.error(e);
       setError(e?.message ?? String(e));
