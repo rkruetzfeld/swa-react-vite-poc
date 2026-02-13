@@ -26,7 +26,7 @@ export const msalConfig: Configuration = {
     authority: `https://login.microsoftonline.com/${tenantId}`,
 
     // Main app stays on the origin.
-    redirectUri: origin,
+    redirectUri: redirectUri: "/auth-popup.html",
     postLogoutRedirectUri: origin,
 
     // IMPORTANT: popup returns here (static page).
