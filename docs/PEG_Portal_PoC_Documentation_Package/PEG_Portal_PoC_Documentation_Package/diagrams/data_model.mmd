@@ -1,0 +1,41 @@
+classDiagram
+  class ProjectDoc {
+    +string id
+    +string tenantId
+    +int projectId
+    +string projectNumber
+    +string projectName
+    +bool isActive
+    +string lastUpdateUtc
+    +string source
+    +datetime syncedUtc
+  }
+
+  class PmwebEstimateHeaderDoc {
+    +string id
+    +string tenantId
+    +string docType
+    +string estimateId
+    +string projectId
+    +int revisionNumber
+    +datetimeOffset revisionDate
+    +decimal totalCostValue
+    +decimal totalExtCostValue
+    +JsonElement source
+  }
+
+  class PmwebEstimateDetailDoc {
+    +string id
+    +string tenantId
+    +string docType
+    +string detailId
+    +string estimateId
+    +int lineNumber
+    +string costCodeId
+    +decimal quantity
+    +decimal unitCost
+    +decimal totalCost
+    +JsonElement source
+  }
+
+  PmwebEstimateHeaderDoc "1" --> "many" PmwebEstimateDetailDoc : estimateId

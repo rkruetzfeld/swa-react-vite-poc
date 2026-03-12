@@ -1,0 +1,22 @@
+sequenceDiagram
+  autonumber
+  participant U as User
+  participant UI as SWA UI (React)
+  participant API as Function App API
+  participant C as Cosmos DB (Portal/Projects)
+  participant LA as Logic App (Projects)
+  participant SQL as PMWeb SQL (SP)
+
+  U->>UI: Open Projects page
+  UI->>API: GET /projects (with bearer token)
+  API->>C: Query projects for tenantId
+  C-->>API: results[]
+  API-->>UI: JSON
+  UI-->>U: Render grid
+
+  Note over API,LA: Background sync (timer)
+  API->>LA: POST PROJECTS_SYNC_URL {sinceUtc:null}
+  LA->>SQL: Execute SP
+  SQL-->>LA: rows
+  LA-->>API: {results:[...]}
+  API->>C: Upsert each project (partition = tenantId)

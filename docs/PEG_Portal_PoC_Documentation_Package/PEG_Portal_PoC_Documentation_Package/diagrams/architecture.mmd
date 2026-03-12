@@ -1,0 +1,32 @@
+flowchart LR
+  subgraph Browser["User Browser"]
+    A["React/Vite UI (SWA)"]
+    MSAL["MSAL (Entra ID)"]
+  end
+
+  subgraph Azure["Azure"]
+    SWA["Azure Static Web Apps\n(blue-stone...)"]
+    FA["Azure Function App\npegportal-api-func-cc-001"]
+    COSMOS["Cosmos DB\nDB: Portal\nContainers: Projects, Estimates"]
+    LA1["Logic App\nProjects Sync"]
+    LA2["Logic App\nEstimates Header Sync"]
+    LA3["Logic App\nEstimate Details Sync"]
+  end
+
+  subgraph External["External / Network"]
+    GW["Data Gateway / ODBC path"]
+    SQL["PMWeb SQL Server\n(stored procedures)"]
+  end
+
+  A -->|static assets| SWA
+  A --> MSAL
+  A -->|Bearer token| FA
+
+  FA --> COSMOS
+  FA -->|POST callback URL| LA1
+  FA -->|POST callback URL| LA2
+  FA -->|POST callback URL| LA3
+
+  LA1 --> GW --> SQL
+  LA2 --> GW --> SQL
+  LA3 --> GW --> SQL

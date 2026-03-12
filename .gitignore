@@ -37,3 +37,27 @@ cd
 *.docx
 *357200272*
 >>>>>>> restore-ui-b4a1638
+
+# --- build artifacts ---
+dist/
+build/
+.local_publish/
+publish/
+
+# --- dependencies ---
+node_modules/
+
+# --- env files ---
+.env
+.env.*
+
+# --- OS / tooling ---
+.DS_Store
+Thumbs.db
+
+# --- editor/tooling ---
+.vscode/
+
+# --- Azure SWA local tooling ---
+.swa/
+.azure/
