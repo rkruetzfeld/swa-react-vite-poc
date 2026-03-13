@@ -37,7 +37,6 @@ export default function AuthGate(props: { children: React.ReactNode }) {
   const [ready, setReady] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // Keep active account set whenever we discover one
   React.useEffect(() => {
     const acct = pickAccount(instance, accounts);
     if (acct) instance.setActiveAccount(acct);
@@ -49,20 +48,15 @@ export default function AuthGate(props: { children: React.ReactNode }) {
   const signIn = async () => {
     try {
       setError(null);
-
-      // Avoid overlapping interactive calls.
       if (inProgress !== InteractionStatus.None) return;
 
-      // Popup login. (Do not put `await` outside this function.)
       const result = await instance.loginPopup({
         ...loginRequest,
       });
 
-      if (result?.account) {
-        instance.setActiveAccount(result.account);
-      }
+      if (result?.account) instance.setActiveAccount(result.account);
 
-      // Refresh so msal-react rehydrates accounts cleanly.
+      // Refresh so msal-react rehydrates accounts cleanly
       window.location.reload();
     } catch (e: any) {
       console.error(e);
@@ -98,9 +92,7 @@ export default function AuthGate(props: { children: React.ReactNode }) {
     return <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>Signing you in…</div>;
   }
 
-  if (active) {
-    return <>{props.children}</>;
-  }
+  if (active) return <>{props.children}</>;
 
   return (
     <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
@@ -125,4 +117,3 @@ export default function AuthGate(props: { children: React.ReactNode }) {
     </div>
   );
 }
-``
