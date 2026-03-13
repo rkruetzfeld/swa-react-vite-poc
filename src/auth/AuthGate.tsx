@@ -31,6 +31,12 @@ function pickAccount(
   return instance.getActiveAccount() ?? accounts[0] ?? instance.getAllAccounts()[0] ?? null;
 }
 
+function isTimedOutError(e: any): boolean {
+  const code = e?.errorCode || e?.code || "";
+  const msg = (e?.message || "").toLowerCase();
+  return code === "timed_out" || msg.includes("timed_out");
+}
+
 export default function AuthGate(props: { children: React.ReactNode }) {
   const { instance, accounts, inProgress } = useMsal();
 
@@ -50,16 +56,32 @@ export default function AuthGate(props: { children: React.ReactNode }) {
       setError(null);
       if (inProgress !== InteractionStatus.None) return;
 
+      // 1) Try popup first
       const result = await instance.loginPopup({
-        ...loginRequest,
+        ...loginRequest
       });
 
       if (result?.account) instance.setActiveAccount(result.account);
-
-      // Refresh so msal-react rehydrates accounts cleanly
       window.location.reload();
     } catch (e: any) {
-      console.error(e);
+      console.error("loginPopup failed:", e);
+
+      // 2) If popup times out (common in InPrivate), fall back to redirect
+      if (isTimedOutError(e)) {
+        try {
+          await instance.loginRedirect({
+            ...loginRequest,
+            // redirect flow should return to the SPA
+            redirectUri: window.location.origin
+          });
+          return; // browser will redirect away
+        } catch (e2: any) {
+          console.error("loginRedirect fallback failed:", e2);
+          setError(e2?.message ?? String(e2));
+          return;
+        }
+      }
+
       setError(e?.message ?? String(e));
     }
   };
@@ -92,7 +114,9 @@ export default function AuthGate(props: { children: React.ReactNode }) {
     return <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>Signing you in…</div>;
   }
 
-  if (active) return <>{props.children}</>;
+  if (active) {
+    return <>{props.children}</>;
+  }
 
   return (
     <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
