@@ -1,4 +1,3 @@
-// src/auth/AuthGate.tsx
 import React from "react";
 import { useMsal } from "@azure/msal-react";
 import { InteractionStatus, type AccountInfo } from "@azure/msal-browser";
@@ -21,7 +20,14 @@ function breakoutToTopLevel() {
   }
 }
 
-function pickAccount(instance: { getActiveAccount: () => AccountInfo | null; getAllAccounts: () => AccountInfo[] }, accounts: AccountInfo[]) {
+function pickAccount(
+  instance: {
+    getActiveAccount: () => AccountInfo | null;
+    getAllAccounts: () => AccountInfo[];
+    setActiveAccount: (a: AccountInfo | null) => void;
+  },
+  accounts: AccountInfo[]
+) {
   return instance.getActiveAccount() ?? accounts[0] ?? instance.getAllAccounts()[0] ?? null;
 }
 
@@ -31,7 +37,7 @@ export default function AuthGate(props: { children: React.ReactNode }) {
   const [ready, setReady] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
-  // 1) Keep active account set whenever we discover one
+  // Keep active account set whenever we discover one
   React.useEffect(() => {
     const acct = pickAccount(instance, accounts);
     if (acct) instance.setActiveAccount(acct);
@@ -40,24 +46,42 @@ export default function AuthGate(props: { children: React.ReactNode }) {
 
   const active = pickAccount(instance, accounts);
 
-const result = await instance.loginPopup({
-  ...loginRequest
-});
+  const signIn = async () => {
+    try {
+      setError(null);
 
+      // Avoid overlapping interactive calls.
+      if (inProgress !== InteractionStatus.None) return;
+
+      // Popup login. (Do not put `await` outside this function.)
+      const result = await instance.loginPopup({
+        ...loginRequest,
+      });
+
+      if (result?.account) {
+        instance.setActiveAccount(result.account);
+      }
+
+      // Refresh so msal-react rehydrates accounts cleanly.
+      window.location.reload();
+    } catch (e: any) {
+      console.error(e);
+      setError(e?.message ?? String(e));
+    }
+  };
 
   if (error) {
     return (
       <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
         <h3>Authentication error</h3>
         <pre style={{ whiteSpace: "pre-wrap" }}>{error}</pre>
+
         {!active && (
-          <button
-            onClick={signIn}
-            style={{ padding: "10px 14px", marginTop: 12, cursor: "pointer" }}
-          >
+          <button onClick={signIn} style={{ padding: "10px 14px", marginTop: 12, cursor: "pointer" }}>
             Try sign in again
           </button>
         )}
+
         {isInIframe() && (
           <button
             onClick={breakoutToTopLevel}
@@ -81,13 +105,15 @@ const result = await instance.loginPopup({
   return (
     <div style={{ padding: 16, fontFamily: "Segoe UI, Arial" }}>
       <div style={{ marginBottom: 10 }}>You’re not signed in.</div>
+
       <button
         onClick={signIn}
-        disabled={inProgress !== InteractionStatus.None && inProgress !== "none"}
+        disabled={inProgress !== InteractionStatus.None}
         style={{ padding: "10px 14px", cursor: "pointer" }}
       >
         Sign in
       </button>
+
       {isInIframe() && (
         <button
           onClick={breakoutToTopLevel}
@@ -99,3 +125,4 @@ const result = await instance.loginPopup({
     </div>
   );
 }
+``

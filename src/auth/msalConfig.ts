@@ -12,12 +12,15 @@ export const msalConfig: Configuration = {
     authority: `https://login.microsoftonline.com/${tenantId}`,
     redirectUri: origin,
     postLogoutRedirectUri: origin,
+
+    // Key change: popup returns to the real app
     popupRedirectUri: origin,
-    navigateToLoginRequestUrl: false
+
+    navigateToLoginRequestUrl: false,
   },
   cache: {
     cacheLocation: "localStorage",
-    storeAuthStateInCookie: false
+    storeAuthStateInCookie: false,
   },
   system: {
     loggerOptions: {
@@ -25,11 +28,11 @@ export const msalConfig: Configuration = {
       loggerCallback: (_level, message, containsPii) => {
         if (containsPii) return;
         // console.log(`[msal] ${message}`);
-      }
-    }
-  }
+      },
+    },
+  },
 };
 
 export const loginRequest = {
-  scopes: ["openid", "profile", "offline_access", apiScope].filter(Boolean)
+  scopes: ["openid", "profile", "offline_access", apiScope].filter(Boolean),
 };
