@@ -61,3 +61,7 @@ Thumbs.db
 # --- Azure SWA local tooling ---
 .swa/
 .azure/
+
+# Local emulators / tooling
+.azurite/
+_local_publish/
