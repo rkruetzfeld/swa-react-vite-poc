@@ -1,45 +1,64 @@
 import React, { PropsWithChildren, useEffect, useMemo, useState } from "react";
 import { Navigate, NavLink, Route, Routes, useLocation } from "react-router-dom";
 
-// Auth gate (existing in repo per earlier context)
+// Auth gate + sign out (exists per your folder structure)
 import AuthGate from "./auth/AuthGate";
 import SignOutButton from "./auth/SignOutButton";
 
-// Pages (these should exist in /src/pages)
+// Pages (exists per your /src/pages screenshot)
 import ProjectsPage from "./pages/ProjectsPage";
 import EstimatesPage from "./pages/EstimatesPage";
 import ForecastPage from "./pages/ForecastPage";
 import HealthPage from "./pages/HealthPage";
+import ApiEstimatesPage from "./pages/ApiEstimatesPage";
+import SmokeTestPage from "./pages/SmokeTestPage";
+import ReportsPage from "./pages/ReportsPage";
+import DashboardPage from "./pages/DashboardPage";
 
 /**
  * App.tsx
  *
- * Purpose:
- * - Provide a single authenticated shell layout (top bar + left nav) for all app pages.
- * - Restore the navigation collapse toggle consistently across routes.
- * - Keep page-specific actions inside page toolbars (not the global header).
+ * Goals:
+ * - Provide a single authenticated shell layout (top bar + left navigation) for all app pages.
+ * - Keep page-specific actions inside page toolbars (e.g., Create/Delete Estimate stay on Estimates page).
+ * - Provide a consistent nav collapse control (and persist preference).
  */
+
+type NavSection = "Forms" | "Tools" | "Reports" | "Dashboards" | "Pinned";
 
 type NavItem = {
   label: string;
   to: string;
-  section: "Forms" | "Utilities" | "Pinned";
+  section: NavSection;
+  /** Optional badge text (e.g., "NEW") */
+  badge?: string;
 };
 
 const NAV_ITEMS: NavItem[] = [
+  // Forms
   { section: "Forms", label: "Projects", to: "/projects" },
   { section: "Forms", label: "Estimates", to: "/estimates" },
   { section: "Forms", label: "Forecast", to: "/forecast" },
-  { section: "Utilities", label: "Health", to: "/health" },
+
+  // Tools
+  { section: "Tools", label: "API Test", to: "/api-test" },
+  { section: "Tools", label: "Smoke Test", to: "/smoke-test" },
+
+  // Reports / Dashboards
+  { section: "Reports", label: "Reports", to: "/reports" },
+  { section: "Dashboards", label: "Dashboards", to: "/dashboards" },
+
+  // Pinned (shortcuts)
+  { section: "Pinned", label: "Estimates", to: "/estimates" },
+  { section: "Pinned", label: "Forecast", to: "/forecast" },
 ];
 
 const LS_KEY_NAV_COLLAPSED = "portal.navCollapsed";
 
-function useNavCollapsed(): [boolean, (v: boolean) => void, () => void] {
+function useNavCollapsed(): [boolean, () => void] {
   const [collapsed, setCollapsed] = useState<boolean>(() => {
     try {
-      const v = window.localStorage.getItem(LS_KEY_NAV_COLLAPSED);
-      return v === "1";
+      return window.localStorage.getItem(LS_KEY_NAV_COLLAPSED) === "1";
     } catch {
       return false;
     }
@@ -53,25 +72,38 @@ function useNavCollapsed(): [boolean, (v: boolean) => void, () => void] {
     }
   }, [collapsed]);
 
-  const toggle = () => setCollapsed(!collapsed);
-  return [collapsed, setCollapsed, toggle];
+  const toggle = () => setCollapsed((v) => !v);
+  return [collapsed, toggle];
+}
+
+function classNames(...parts: Array<string | false | null | undefined>) {
+  return parts.filter(Boolean).join(" ");
 }
 
 function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
-  const [navCollapsed, , toggleNavCollapsed] = useNavCollapsed();
+  const [navCollapsed, toggleNavCollapsed] = useNavCollapsed();
 
   const sections = useMemo(() => {
-    const groups: Record<string, NavItem[]> = {};
+    const order: NavSection[] = ["Forms", "Tools", "Reports", "Dashboards", "Pinned"];
+    const groups = new Map<NavSection, NavItem[]>();
+    for (const s of order) groups.set(s, []);
     for (const item of NAV_ITEMS) {
-      groups[item.section] ??= [];
-      groups[item.section].push(item);
+      const list = groups.get(item.section) ?? [];
+      list.push(item);
+      groups.set(item.section, list);
     }
-    return groups;
+    return { order, groups };
   }, []);
 
+  const currentPathLabel = useMemo(() => {
+    // Normalize "root" into default route for display.
+    const p = location.pathname === "/" ? "/projects" : location.pathname;
+    return p;
+  }, [location.pathname]);
+
   return (
-    <div className={"app-root" + (navCollapsed ? " nav-collapsed" : "")}> 
+    <div className={classNames("app-root", navCollapsed && "nav-collapsed")}> 
       <header className="app-topbar">
         <div className="topbar-left">
           <button
@@ -84,10 +116,9 @@ function AppShell({ children }: PropsWithChildren) {
             {navCollapsed ? "Expand" : "Collapse"}
           </button>
 
-          {/* Simple breadcrumb/title */}
           <span className="topbar-sep" aria-hidden="true">|</span>
-          <span className="topbar-location" title={location.pathname}>
-            {location.pathname === "/" ? "/projects" : location.pathname}
+          <span className="topbar-location" title={currentPathLabel}>
+            {currentPathLabel}
           </span>
         </div>
 
@@ -104,29 +135,33 @@ function AppShell({ children }: PropsWithChildren) {
         <aside className="app-sidenav" aria-label="Navigation">
           <div className="sidenav-title">NAVIGATION</div>
 
-          {Object.entries(sections).map(([sectionName, items]) => (
-            <div className="sidenav-section" key={sectionName}>
-              <div className="sidenav-section-title">{sectionName}</div>
-              <div className="sidenav-section-items">
-                {items.map((it) => (
-                  <NavLink
-                    key={it.to}
-                    to={it.to}
-                    className={({ isActive }) =>
-                      "sidenav-item" + (isActive ? " active" : "")
-                    }
-                  >
-                    <span className="sidenav-item-label">{it.label}</span>
-                  </NavLink>
-                ))}
+          {sections.order.map((sectionName) => {
+            const items = sections.groups.get(sectionName) ?? [];
+            if (items.length === 0) return null;
+            return (
+              <div className="sidenav-section" key={sectionName}>
+                <div className="sidenav-section-title">{sectionName}</div>
+                <div className="sidenav-section-items">
+                  {items.map((it) => (
+                    <NavLink
+                      key={`${sectionName}:${it.label}:${it.to}`}
+                      to={it.to}
+                      className={({ isActive }) =>
+                        classNames("sidenav-item", isActive && "active")
+                      }
+                      end={it.to === "/projects" || it.to === "/estimates" || it.to === "/forecast"}
+                    >
+                      <span className="sidenav-item-label">{it.label}</span>
+                      {it.badge ? <span className="sidenav-item-badge">{it.badge}</span> : null}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           <div className="sidenav-footer">
-            <div className="sidenav-hint">
-              <small>Tip: use Collapse to minimize the sidebar.</small>
-            </div>
+            <small>Tip: use Collapse to minimize the sidebar.</small>
           </div>
         </aside>
 
@@ -143,11 +178,26 @@ export default function App() {
     <AuthGate>
       <AppShell>
         <Routes>
+          {/* Default route */}
           <Route path="/" element={<Navigate to="/projects" replace />} />
+
+          {/* Forms */}
           <Route path="/projects" element={<ProjectsPage />} />
           <Route path="/estimates" element={<EstimatesPage />} />
           <Route path="/forecast" element={<ForecastPage />} />
+
+          {/* Tools */}
+          <Route path="/api-test" element={<ApiEstimatesPage />} />
+          <Route path="/smoke-test" element={<SmokeTestPage />} />
+
+          {/* Reports & Dashboards */}
+          <Route path="/reports" element={<ReportsPage />} />
+          <Route path="/dashboards" element={<DashboardPage />} />
+
+          {/* Utilities */}
           <Route path="/health" element={<HealthPage />} />
+
+          {/* Fallback */}
           <Route path="*" element={<Navigate to="/projects" replace />} />
         </Routes>
       </AppShell>
