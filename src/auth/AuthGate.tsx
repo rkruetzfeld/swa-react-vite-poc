@@ -40,33 +40,10 @@ export default function AuthGate(props: { children: React.ReactNode }) {
 
   const active = pickAccount(instance, accounts);
 
-  const signIn = async () => {
-    try {
-      setError(null);
+const result = await instance.loginPopup({
+  ...loginRequest
+});
 
-      // Avoid multiple overlapping popups.
-      if (inProgress !== InteractionStatus.None && inProgress !== "none") return;
-
-      // IMPORTANT:
-      // Use a *static* popup redirect page that does not run the SPA/router.
-      // This prevents MSAL's popup response from being consumed/rewritten by React Router.
-      const popupRedirectUri = `${window.location.origin}/auth-popup.html`;
-
-      const result = await instance.loginPopup({
-        ...loginRequest,
-        redirectUri: popupRedirectUri,
-      });
-
-      if (result?.account) instance.setActiveAccount(result.account);
-
-      // Force a hard refresh so `useMsal()` rehydrates accounts cleanly.
-      // (This avoids the "popup closed but UI still says signed-out" loop.)
-      window.location.reload();
-    } catch (e: any) {
-      console.error(e);
-      setError(e?.message ?? String(e));
-    }
-  };
 
   if (error) {
     return (
