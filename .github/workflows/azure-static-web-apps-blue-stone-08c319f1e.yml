@@ -20,6 +20,17 @@ jobs:
 
       - name: Install
         run: npm ci
+      - name: Verify react-router-dom installed
+        run: |
+                echo "PWD=$(pwd)"
+                node -v
+                npm -v
+                ls -la
+                echo "node_modules/react-router-dom:"
+                ls -la node_modules/react-router-dom || true
+                echo "require.resolve check:"
+                node -e "console.log('react-router-dom =>', require.resolve('react-router-dom'))"
+
 
       - name: Build (Vite)
         env:
