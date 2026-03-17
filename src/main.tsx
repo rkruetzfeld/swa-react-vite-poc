@@ -11,14 +11,21 @@ import "./index.css";
 async function bootstrap() {
   const msalInstance = new PublicClientApplication(msalConfig);
 
-  // MSAL Browser: initialize must resolve before calling other MSAL APIs [3](https://dev.to/rebiiin/configure-http-security-response-headers-for-azure-static-web-apps-2b81)
+  // MSAL initialization must complete before calling other MSAL APIs
   await msalInstance.initialize();
 
-  // If we ever fall back to redirect, ensure the redirect response is processed on load
-  // This avoids redirect flows getting stuck or leaving temp cache entries behind [2](https://learn.microsoft.com/en-us/entra/msal/javascript/browser/errors)
-  await msalInstance.handleRedirectPromise().catch(() => {
-    // ignore; AuthGate will handle sign-in
-  });
+  // Complete any pending redirect response (safe even if you mostly use redirect)
+  const result = await msalInstance.handleRedirectPromise().catch(() => null);
+
+  // Set an active account if we got one back, otherwise pick the first cached account
+  if (result?.account) {
+    msalInstance.setActiveAccount(result.account);
+  } else {
+    const accounts = msalInstance.getAllAccounts();
+    if (accounts.length > 0) {
+      msalInstance.setActiveAccount(accounts[0]);
+    }
+  }
 
   ReactDOM.createRoot(document.getElementById("root")!).render(
     <React.StrictMode>
@@ -35,8 +42,9 @@ bootstrap().catch((e) => {
   console.error("MSAL bootstrap failed:", e);
   const el = document.getElementById("root");
   if (el) {
-    el.innerHTML = `<pre style="padding:16px;font-family:Segoe UI,Arial">MSAL bootstrap failed:\n${String(
-      e?.message ?? e
-    )}</pre>`;
+    el.innerHTML = `<pre style="padding:16px;font-family:Segoe UI, Arial, sans-serif">
+MSAL bootstrap failed:
+${String(e?.message ?? e)}
+</pre>`;
   }
 });
