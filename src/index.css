@@ -1,8 +1,8 @@
 /* ============================================================
-   PEG Portal - Base UI + Layout Shell
-   - Builds on your existing tokens/background
-   - Adds topbar + sidenav + content layout
-   - Supports .nav-collapsed (from App.tsx)
+   PEG Portal - Base UI + Layout Shell (Restored + Upgraded)
+   - Keeps your existing tokens/background
+   - Adds stable layout for topbar + sidenav + content
+   - Supports .nav-collapsed (App.tsx toggles this on .app-root)
    ============================================================ */
 
 :root {
@@ -12,21 +12,23 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
+  /* Your tokens (kept) */
   --bg0: #0b1220;
   --bg1: #0e172a;
-
   --panel: rgba(255, 255, 255, 0.06);
   --panel2: rgba(255, 255, 255, 0.08);
   --border: rgba(255, 255, 255, 0.10);
-
   --text: rgba(255, 255, 255, 0.92);
   --muted: rgba(255, 255, 255, 0.62);
-  --faint: rgba(255, 255, 255, 0.48);
-
   --accent: #3b82f6;
   --accent2: #60a5fa;
 
-  /* Layout tokens */
+  /* Added tokens (for “former glory”) */
+  --faint: rgba(255, 255, 255, 0.48);
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --focus: 0 0 0 3px rgba(96, 165, 250, 0.35);
+
+  /* Layout */
   --topbar-h: 52px;
   --nav-w: 260px;
   --nav-w-collapsed: 72px;
@@ -35,9 +37,6 @@
 
   --radius: 14px;
   --radius-sm: 10px;
-
-  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
-  --focus: 0 0 0 3px rgba(96, 165, 250, 0.35);
 }
 
 /* Full-height app */
@@ -49,7 +48,7 @@ html, body, #root {
 
 /* Your background (kept) */
 body {
-  display: block;
+  display: block; /* no flex centering */
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(59, 130, 246, 0.22), transparent 60%),
     radial-gradient(900px 500px at 90% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
@@ -57,7 +56,7 @@ body {
   color: var(--text);
 }
 
-/* Root should not be centered like Vite template */
+/* Root should not be centered like the Vite template */
 #root {
   max-width: none;
   padding: 0;
@@ -89,8 +88,7 @@ select:focus-visible {
 
 /* ============================================================
    App Shell Layout
-   Classes already used in App.tsx:
-   .app-root .app-topbar .app-body .app-sidenav .app-content
+   These classes exist in your App.tsx structure.
    ============================================================ */
 
 .app-root {
@@ -181,7 +179,7 @@ select:focus-visible {
   overflow: auto;
 }
 
-/* Collapse behavior (App.tsx toggles .nav-collapsed on .app-root) */
+/* Collapse behavior */
 .nav-collapsed .app-sidenav {
   width: var(--nav-w-collapsed);
   flex-basis: var(--nav-w-collapsed);
@@ -271,7 +269,7 @@ select:focus-visible {
 }
 
 /* ============================================================
-   Generic UI Controls (helps toolbars look consistent)
+   Generic UI Controls (toolbars look consistent)
    ============================================================ */
 
 input[type="text"],
