@@ -1,218 +1,134 @@
-import React, { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AgGridReact } from "ag-grid-react";
-import type { ColDef, GridReadyEvent, SelectionChangedEvent } from "ag-grid-community";
+import type { ColDef } from "ag-grid-community";
+import { apiGet } from "../api/client";
 
-import "ag-grid-community/styles/ag-grid.css";
-import "ag-grid-community/styles/ag-theme-quartz.css";
+const API_BASE = "/api";
 
-import { apiGet, apiPost } from "../api/client";
+type ProjectDto = {
+  projectId: string;
+  name: string;
+  updatedUtc: string;
+};
 
-type PmwebEstimateHeader = {
+type EstimateDto = {
   estimateId: string;
   projectId: string;
-  revisionId: string | null;
-  revisionNumber: number | null;
-  revisionDateUtc: string | null;
-  description: string | null;
-  uomId: string | null;
-  estimateUnit: number | null;
-  docStatusId: string | null;
-  currencyId: string | null;
-  isActive: boolean | null;
-  specificationGroupId: string | null;
-  categoryId: string | null;
-  reference: string | null;
-  totalCostValue: number | null;
-  totalExtCostValue: number | null;
-  updatedUtc: string | null;
+  name?: string;
+  status?: string;
+  amount?: number;
+  updatedUtc?: string;
 };
 
-type PmwebEstimateDetail = {
-  estimateDetailId: string;
-  estimateId: string;
-  lineNumber: number | null;
-  itemCode: string | null;
-  description: string | null;
-  costCodeId: string | null;
-  costTypeId: string | null;
-  uomId: string | null;
-  quantity: number | null;
-  unitCost: number | null;
-  totalCost: number | null;
-  notes1: string | null;
+type EstimateRow = EstimateDto & {
+  projectName?: string;
 };
 
-type EstimatesResponse = {
-  ok: boolean;
-  count: number;
-  estimates: PmwebEstimateHeader[];
-};
+export default function EstimatesPage() {
+  const [rows, setRows] = useState<EstimateRow[]>([]);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>("");
+  const [quickFilter, setQuickFilter] = useState("");
 
-type DetailsResponse = {
-  ok: boolean;
-  count: number;
-  details: PmwebEstimateDetail[];
-};
-
-const EstimatesPage: React.FC = () => {
-  const [estimates, setEstimates] = useState<PmwebEstimateHeader[]>([]);
-  const [details, setDetails] = useState<PmwebEstimateDetail[]>([]);
-  const [selectedEstimate, setSelectedEstimate] = useState<PmwebEstimateHeader | null>(null);
-
-  const [loadingEstimates, setLoadingEstimates] = useState(false);
-  const [loadingDetails, setLoadingDetails] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [status, setStatus] = useState<string | null>(null);
-
-  const estimatesColDefs = useMemo<ColDef<PmwebEstimateHeader>[]>(
+  const colDefs = useMemo<ColDef<EstimateRow>[]>(
     () => [
-      { headerName: "EstimateId", field: "estimateId", minWidth: 260 },
-      { headerName: "ProjectId", field: "projectId", minWidth: 220 },
-      { headerName: "Rev#", field: "revisionNumber", width: 90 },
-      { headerName: "Revision Date (UTC)", field: "revisionDateUtc", minWidth: 190 },
-      { headerName: "Description", field: "description", flex: 1, minWidth: 260 },
-      { headerName: "Reference", field: "reference", minWidth: 140 },
-      { headerName: "Total Cost", field: "totalCostValue", minWidth: 130 },
-      { headerName: "Total Ext Cost", field: "totalExtCostValue", minWidth: 150 },
-      { headerName: "Active", field: "isActive", width: 90 },
-      { headerName: "Updated (UTC)", field: "updatedUtc", minWidth: 190 },
+      { headerName: "Estimate Id", field: "estimateId", sortable: true, filter: true, width: 160 },
+      { headerName: "Project Id", field: "projectId", sortable: true, filter: true, width: 150 },
+      { headerName: "Project", field: "projectName", sortable: true, filter: true, flex: 1, minWidth: 220 },
+      { headerName: "Name", field: "name", sortable: true, filter: true, flex: 1, minWidth: 220 },
+      { headerName: "Status", field: "status", sortable: true, filter: true, width: 130 },
+      {
+        headerName: "Amount",
+        field: "amount",
+        sortable: true,
+        filter: true,
+        width: 140,
+        valueFormatter: (p) =>
+          typeof p.value === "number" ? p.value.toLocaleString(undefined, { style: "currency", currency: "CAD" }) : "",
+      },
+      { headerName: "Updated (UTC)", field: "updatedUtc", sortable: true, filter: true, width: 190 },
     ],
     []
   );
 
-  const detailsColDefs = useMemo<ColDef<PmwebEstimateDetail>[]>(
-    () => [
-      { headerName: "Line", field: "lineNumber", width: 90 },
-      { headerName: "Item Code", field: "itemCode", minWidth: 140 },
-      { headerName: "Description", field: "description", flex: 1, minWidth: 260 },
-      { headerName: "CostCodeId", field: "costCodeId", minWidth: 160 },
-      { headerName: "CostTypeId", field: "costTypeId", minWidth: 160 },
-      { headerName: "UOM", field: "uomId", minWidth: 110 },
-      { headerName: "Qty", field: "quantity", minWidth: 110 },
-      { headerName: "Unit Cost", field: "unitCost", minWidth: 120 },
-      { headerName: "Total Cost", field: "totalCost", minWidth: 120 },
-      { headerName: "Notes", field: "notes1", flex: 1, minWidth: 220 },
-    ],
-    []
-  );
-
-  async function loadEstimates() {
-    setLoadingEstimates(true);
-    setStatus(null);
+  async function refresh() {
+    setBusy(true);
+    setError("");
     try {
-      const res = await apiGet<EstimatesResponse>("/estimates");
-      setEstimates(res.estimates ?? []);
-      if (!res.estimates?.length) {
-        setStatus("No Estimates in Cosmos yet. Run Sync to pull from PMWeb.");
-      }
-    } catch (err: any) {
-      setStatus(err?.message ?? "Failed to load estimates.");
-    } finally {
-      setLoadingEstimates(false);
-    }
-  }
+      // Load both sets
+      const [estimates, projects] = await Promise.all([
+        apiGet<EstimateDto[]>(`${API_BASE}/estimates`),
+        apiGet<ProjectDto[]>(`${API_BASE}/projects`),
+      ]);
 
-  async function loadDetails(estimateId: string) {
-    setLoadingDetails(true);
-    setStatus(null);
-    try {
-      const res = await apiGet<DetailsResponse>(`/estimates/${encodeURIComponent(estimateId)}/details`);
-      setDetails(res.details ?? []);
-    } catch (err: any) {
-      setDetails([]);
-      setStatus(err?.message ?? "Failed to load estimate details.");
-    } finally {
-      setLoadingDetails(false);
-    }
-  }
+      const projectMap = new Map<string, string>();
+      (projects ?? []).forEach((p) => projectMap.set(p.projectId, p.name));
 
-  async function syncEstimates() {
-    setSyncing(true);
-    setStatus(null);
-    try {
-      // Optional body fields supported by the backend: sinceUtc, includeInactive
-      const res = await apiPost<any>("/sync/estimates", { sinceUtc: null, includeInactive: true });
-      const upserted = res?.upserted ?? res?.Upserted ?? res?.data?.upserted;
-      const elapsedMs = res?.elapsedMs ?? res?.ElapsedMs;
-      setStatus(`Sync complete. upserted=${upserted ?? "?"}${elapsedMs ? ` • elapsedMs=${elapsedMs}` : ""}`);
-      await loadEstimates();
-    } catch (err: any) {
-      setStatus(err?.message ?? "Sync failed.");
+      const enriched: EstimateRow[] = (estimates ?? []).map((e) => ({
+        ...e,
+        projectName: projectMap.get(e.projectId) ?? "",
+      }));
+
+      setRows(enriched);
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+      setRows([]);
     } finally {
-      setSyncing(false);
+      setBusy(false);
     }
   }
 
   useEffect(() => {
-    loadEstimates();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    refresh();
   }, []);
 
-  const onEstimatesSelectionChanged = async (evt: SelectionChangedEvent<PmwebEstimateHeader>) => {
-    const row = evt.api.getSelectedRows()[0] ?? null;
-    setSelectedEstimate(row);
-    setDetails([]);
-    if (row?.estimateId) {
-      await loadDetails(row.estimateId);
-    }
-  };
-
-  const onGridReady = (evt: GridReadyEvent) => {
-    evt.api.sizeColumnsToFit();
-  };
-
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-        <button onClick={loadEstimates} disabled={loadingEstimates || syncing}>
-          Refresh
-        </button>
-        <button onClick={syncEstimates} disabled={syncing}>
-          {syncing ? "Syncing…" : "Sync from PMWeb"}
-        </button>
-        {loadingEstimates && <span>Loading estimates…</span>}
-        {loadingDetails && <span>Loading details…</span>}
-        {status && <span style={{ marginLeft: 8 }}>{status}</span>}
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
+      <div className="panel" style={{ padding: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 260 }}>
+            <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>Estimates</div>
+            <div className="kicker">
+              Estimates are joined to Projects by <code>projectId</code>.
+            </div>
+          </div>
 
-      <div className="ag-theme-quartz" style={{ height: 420, width: "100%" }}>
-        <AgGridReact<PmwebEstimateHeader>
-          rowData={estimates}
-          columnDefs={estimatesColDefs}
-          rowSelection="single"
-          onSelectionChanged={onEstimatesSelectionChanged}
-          onGridReady={onGridReady}
-          pagination
-          paginationPageSize={50}
-          suppressRowClickSelection={false}
-        />
-      </div>
-
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-        <div>
-          <strong>Estimate Details</strong>
-          {selectedEstimate?.estimateId ? (
-            <span style={{ marginLeft: 8 }}>
-              for {selectedEstimate.estimateId}
-            </span>
-          ) : (
-            <span style={{ marginLeft: 8 }}>Select an estimate above.</span>
-          )}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              className="input"
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value)}
+              placeholder="Filter…"
+              style={{ width: 220 }}
+            />
+            <button className="btn btn-primary" onClick={refresh} disabled={busy}>
+              Load Estimates
+            </button>
+          </div>
         </div>
+      </div>
 
-        <div className="ag-theme-quartz" style={{ height: 360, width: "100%" }}>
-          <AgGridReact<PmwebEstimateDetail>
-            rowData={details}
-            columnDefs={detailsColDefs}
-            rowSelection="multiple"
+      {error && (
+        <div className="panel" style={{ border: "1px solid #ffb5b5" }}>
+          {error}
+        </div>
+      )}
+
+      <div className="panel" style={{ flex: 1, minHeight: 0, padding: 0, overflow: "hidden" }}>
+        <div className="ag-theme-quartz-dark" style={{ height: "100%", width: "100%" }}>
+          <AgGridReact<EstimateRow>
+            rowData={rows}
+            columnDefs={colDefs}
+            animateRows
             pagination
-            paginationPageSize={100}
+            paginationPageSize={50}
+            quickFilterText={quickFilter}
+            rowSelection={{ mode: "singleRow" }}
           />
         </div>
       </div>
+
+      <div className="kicker">Rows: {rows.length}</div>
     </div>
   );
-};
-
-
-export default EstimatesPage;
+}
