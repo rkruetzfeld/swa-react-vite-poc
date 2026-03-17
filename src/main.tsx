@@ -14,7 +14,7 @@ async function bootstrap() {
   // Must resolve before calling other MSAL APIs
   await msalInstance.initialize();
 
-  // Complete any pending redirect response (safe even if you mostly use popup/redirect mixes)
+  // Complete any pending redirect response (safe even if you primarily use popup)
   const result = await msalInstance.handleRedirectPromise().catch(() => null);
 
   if (result?.account) {

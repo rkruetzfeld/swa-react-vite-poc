@@ -3,7 +3,11 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import { apiGet } from "../api/client";
 
-const API_BASE = "/api";
+// Function App host (Option A). Strip trailing slash and optional "/api".
+const API_HOST = (import.meta.env.VITE_API_BASE_URL ?? "")
+  .toString()
+  .replace(/\/+$/, "")
+  .replace(/\/api$/i, "");
 
 type ProjectDto = {
   projectId: string;
@@ -52,12 +56,12 @@ export default function ProjectsPage() {
     setBusy(true);
     setError("");
     try {
-      const data = await apiGet<ProjectDto[]>(`${API_BASE}/projects`);
+      if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
+      const data = await apiGet<ProjectDto[]>("/projects", { baseUrl: API_HOST });
       setRows(Array.isArray(data) ? data : []);
 
-      // optional health (don't break UI if it errors)
       try {
-        const h = await apiGet<HealthResponse>(`${API_BASE}/health/projects`);
+        const h = await apiGet<HealthResponse>("/health/projects", { baseUrl: API_HOST });
         setHealth(h ?? null);
       } catch {
         setHealth(null);
@@ -73,7 +77,8 @@ export default function ProjectsPage() {
     setBusy(true);
     setError("");
     try {
-      const result = await apiGet<SqlPingResponse>(`${API_BASE}/diag/sql-ping`);
+      if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
+      const result = await apiGet<SqlPingResponse>("/diag/sql-ping", { baseUrl: API_HOST });
       const elapsed = result?.elapsedMs ?? "?";
       const trace = result?.traceId ? ` • traceId=${result.traceId}` : "";
       setPingResult(`Ping OK • elapsedMs=${elapsed}${trace} • ${new Date().toISOString()}`);
@@ -89,7 +94,8 @@ export default function ProjectsPage() {
     setBusy(true);
     setError("");
     try {
-      const result = await apiGet<any>(`${API_BASE}/diag/projects-ping`);
+      if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
+      const result = await apiGet<any>("/diag/projects-ping", { baseUrl: API_HOST });
       const elapsed = result?.elapsedMs ?? "?";
       const trace = result?.traceId ? ` • traceId=${result.traceId}` : "";
       setPingResult(`Projects Ping OK • elapsedMs=${elapsed}${trace} • ${new Date().toISOString()}`);
@@ -108,27 +114,13 @@ export default function ProjectsPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
       <div className="panel" style={{ padding: 14 }}>
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "flex-start",
-            gap: 12,
-            flexWrap: "wrap",
-          }}
-        >
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
           <div style={{ minWidth: 260 }}>
             <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>Projects</div>
             <div className="kicker">
               Synced Projects from PMWeb into storage. Joins to Estimates will be by <code>projectId</code>.
             </div>
-
-            {pingResult && (
-              <div className="kicker" style={{ marginTop: 6 }}>
-                {pingResult}
-              </div>
-            )}
-
+            {pingResult && <div className="kicker" style={{ marginTop: 6 }}>{pingResult}</div>}
             {health?.latest && (
               <div className="kicker" style={{ marginTop: 6 }}>
                 Last sync: {health.latest.succeeded ? "✅" : "❌"}{" "}
@@ -147,30 +139,18 @@ export default function ProjectsPage() {
               placeholder="Filter…"
               style={{ width: 220 }}
             />
-
-            <button className="btn btn-primary" onClick={refresh} disabled={busy}>
-              Load Projects
-            </button>
-
-            <button className="btn" onClick={pingSql} disabled={busy}>
-              Ping SQL
-            </button>
-
-            <button className="btn" onClick={pingProjects} disabled={busy}>
-              Ping Projects
-            </button>
+            <button className="btn btn-primary" onClick={refresh} disabled={busy}>Load Projects</button>
+            <button className="btn" onClick={pingSql} disabled={busy}>Ping SQL</button>
+            <button className="btn" onClick={pingProjects} disabled={busy}>Ping Projects</button>
           </div>
         </div>
       </div>
 
-      {error && (
-        <div className="panel" style={{ border: "1px solid #ffb5b5" }}>
-          {error}
-        </div>
-      )}
+      {error && <div className="panel" style={{ border: "1px solid #ffb5b5" }}>{error}</div>}
 
       <div className="panel" style={{ flex: 1, minHeight: 0, padding: 0, overflow: "hidden" }}>
         <div className="ag-theme-quartz-dark" style={{ height: "100%", width: "100%" }}>
+          {/* ✅ NOTE: generic parameter closed correctly */}
           <AgGridReact<ProjectDto>
             rowData={rows}
             columnDefs={colDefs}
