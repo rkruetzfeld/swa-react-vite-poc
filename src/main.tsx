@@ -11,20 +11,17 @@ import "./index.css";
 async function bootstrap() {
   const msalInstance = new PublicClientApplication(msalConfig);
 
-  // MSAL initialization must complete before calling other MSAL APIs
+  // Must resolve before calling other MSAL APIs
   await msalInstance.initialize();
 
-  // Complete any pending redirect response (safe even if you mostly use redirect)
+  // Complete any pending redirect response (safe even if you mostly use popup/redirect mixes)
   const result = await msalInstance.handleRedirectPromise().catch(() => null);
 
-  // Set an active account if we got one back, otherwise pick the first cached account
   if (result?.account) {
     msalInstance.setActiveAccount(result.account);
   } else {
     const accounts = msalInstance.getAllAccounts();
-    if (accounts.length > 0) {
-      msalInstance.setActiveAccount(accounts[0]);
-    }
+    if (accounts.length > 0) msalInstance.setActiveAccount(accounts[0]);
   }
 
   ReactDOM.createRoot(document.getElementById("root")!).render(

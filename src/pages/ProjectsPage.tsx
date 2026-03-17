@@ -60,7 +60,7 @@ export default function ProjectsPage() {
       const data = await apiGet<ProjectDto[]>("/projects", { baseUrl: API_HOST });
       setRows(Array.isArray(data) ? data : []);
 
-      // optional health (don't break UI if it errors)
+      // Optional health (don't break UI if it errors)
       try {
         const h = await apiGet<HealthResponse>("/health/projects", { baseUrl: API_HOST });
         setHealth(h ?? null);
@@ -81,7 +81,6 @@ export default function ProjectsPage() {
       if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
 
       const result = await apiGet<SqlPingResponse>("/diag/sql-ping", { baseUrl: API_HOST });
-
       const elapsed = result?.elapsedMs ?? "?";
       const trace = result?.traceId ? ` • traceId=${result.traceId}` : "";
       setPingResult(`Ping OK • elapsedMs=${elapsed}${trace} • ${new Date().toISOString()}`);
@@ -93,7 +92,6 @@ export default function ProjectsPage() {
     }
   }
 
-
   async function pingProjects() {
     setBusy(true);
     setError("");
@@ -101,7 +99,6 @@ export default function ProjectsPage() {
       if (!API_HOST) throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
 
       const result = await apiGet<any>("/diag/projects-ping", { baseUrl: API_HOST });
-
       const elapsed = result?.elapsedMs ?? "?";
       const trace = result?.traceId ? ` • traceId=${result.traceId}` : "";
       setPingResult(`Projects Ping OK • elapsedMs=${elapsed}${trace} • ${new Date().toISOString()}`);
@@ -114,48 +111,53 @@ export default function ProjectsPage() {
   }
 
   useEffect(() => {
-    // Optional: comment this out while you're focused only on sql-ping
     refresh();
   }, []);
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-        <div>
-          <div style={{ fontWeight: 950, fontSize: 18 }}>Projects</div>
-          <div className="kicker">
-            Synced Projects from PMWeb into storage. Joins to Estimates will be by <code>projectId</code>.
+    <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
+      {/* Header + toolbar */}
+      <div className="panel" style={{ padding: 14 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ minWidth: 260 }}>
+            <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>Projects</div>
+            <div className="kicker">
+              Synced Projects from PMWeb into storage. Joins to Estimates will be by <code>projectId</code>.
+            </div>
+
+            {pingResult && <div className="kicker" style={{ marginTop: 6 }}>{pingResult}</div>}
+
+            {health?.latest && (
+              <div className="kicker" style={{ marginTop: 6 }}>
+                Last sync: {health.latest.succeeded ? "✅" : "❌"}{" "}
+                {new Date(health.latest.startedUtc).toISOString()} • {health.latest.durationMs} ms •{" "}
+                {health.latest.recordCount} projects
+                {health.latest.error ? ` • ${health.latest.error}` : ""}
+              </div>
+            )}
           </div>
 
-          {pingResult && <div className="kicker" style={{ marginTop: 6 }}>{pingResult}</div>}
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <input
+              className="input"
+              value={quickFilter}
+              onChange={(e) => setQuickFilter(e.target.value)}
+              placeholder="Filter…"
+              style={{ width: 220 }}
+            />
 
-          {health?.latest && (
-            <div className="kicker" style={{ marginTop: 6 }}>
-              Last sync: {health.latest.succeeded ? "✅" : "❌"}{" "}
-              {new Date(health.latest.startedUtc).toISOString()} • {health.latest.durationMs} ms •{" "}
-              {health.latest.recordCount} projects
-              {health.latest.error ? ` • ${health.latest.error}` : ""}
-            </div>
-          )}
-        </div>
+            <button className="btn btn-primary" onClick={refresh} disabled={busy}>
+              Load Projects
+            </button>
 
-        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-          <input
-            className="input"
-            value={quickFilter}
-            onChange={(e) => setQuickFilter(e.target.value)}
-            placeholder="Filter…"
-            style={{ width: 220 }}
-          />
-          <button className="btn" onClick={refresh} disabled={busy}>
-            Load Projects
-          </button>
-          <button className="btn" onClick={pingSql} disabled={busy}>
-            Ping SQL
-          </button>
-          <button className="btn" onClick={pingProjects} disabled={busy}>
-            Ping Projects
-          </button>
+            <button className="btn" onClick={pingSql} disabled={busy}>
+              Ping SQL
+            </button>
+
+            <button className="btn" onClick={pingProjects} disabled={busy}>
+              Ping Projects
+            </button>
+          </div>
         </div>
       </div>
 
@@ -165,8 +167,9 @@ export default function ProjectsPage() {
         </div>
       )}
 
-      <div className="panel" style={{ flex: 1, minHeight: 0, padding: 0 }}>
-        <div className="ag-theme-quartz" style={{ height: "100%", width: "100%" }}>
+      {/* Grid */}
+      <div className="panel" style={{ flex: 1, minHeight: 0, padding: 0, overflow: "hidden" }}>
+        <div className="ag-theme-quartz-dark" style={{ height: "100%", width: "100%" }}>
           <AgGridReact<ProjectDto>
             rowData={rows}
             columnDefs={colDefs}

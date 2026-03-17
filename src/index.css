@@ -1,8 +1,8 @@
 /* ============================================================
-   PEG Portal - Base UI + Layout Shell (Restored + Upgraded)
-   - Keeps your existing tokens/background
-   - Adds stable layout for topbar + sidenav + content
-   - Supports .nav-collapsed (App.tsx toggles this on .app-root)
+   PEG Portal - Restored + Upgraded UI Shell
+   - Uses your existing tokens and background
+   - Adds layout for App.tsx shell classes
+   - Adds panel/btn/input/kicker used by pages
    ============================================================ */
 
 :root {
@@ -12,26 +12,27 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  /* Your tokens (kept) */
   --bg0: #0b1220;
   --bg1: #0e172a;
+
   --panel: rgba(255, 255, 255, 0.06);
   --panel2: rgba(255, 255, 255, 0.08);
   --border: rgba(255, 255, 255, 0.10);
+
   --text: rgba(255, 255, 255, 0.92);
   --muted: rgba(255, 255, 255, 0.62);
+  --faint: rgba(255, 255, 255, 0.48);
+
   --accent: #3b82f6;
   --accent2: #60a5fa;
 
-  /* Added tokens (for “former glory”) */
-  --faint: rgba(255, 255, 255, 0.48);
   --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
   --focus: 0 0 0 3px rgba(96, 165, 250, 0.35);
 
-  /* Layout */
   --topbar-h: 52px;
   --nav-w: 260px;
   --nav-w-collapsed: 72px;
+
   --pad: 14px;
   --gap: 12px;
 
@@ -46,9 +47,9 @@ html, body, #root {
   margin: 0;
 }
 
-/* Your background (kept) */
+/* Keep your background */
 body {
-  display: block; /* no flex centering */
+  display: block;
   background:
     radial-gradient(1200px 600px at 20% 0%, rgba(59, 130, 246, 0.22), transparent 60%),
     radial-gradient(900px 500px at 90% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
@@ -56,7 +57,7 @@ body {
   color: var(--text);
 }
 
-/* Root should not be centered like the Vite template */
+/* Root should not be centered */
 #root {
   max-width: none;
   padding: 0;
@@ -66,9 +67,7 @@ body {
 /* Baseline reset */
 *,
 *::before,
-*::after {
-  box-sizing: border-box;
-}
+*::after { box-sizing: border-box; }
 
 a { color: inherit; text-decoration: none; }
 a:hover { text-decoration: underline; }
@@ -76,7 +75,6 @@ a:hover { text-decoration: underline; }
 button, input, select { font: inherit; }
 button { cursor: pointer; }
 
-/* Accessibility */
 button:focus-visible,
 a:focus-visible,
 input:focus-visible,
@@ -87,10 +85,8 @@ select:focus-visible {
 }
 
 /* ============================================================
-   App Shell Layout
-   These classes exist in your App.tsx structure.
+   App Shell Layout (matches App.tsx)
    ============================================================ */
-
 .app-root {
   height: 100%;
   display: flex;
@@ -98,7 +94,6 @@ select:focus-visible {
   min-height: 0;
 }
 
-/* Topbar */
 .app-topbar {
   height: var(--topbar-h);
   flex: 0 0 var(--topbar-h);
@@ -111,8 +106,7 @@ select:focus-visible {
   backdrop-filter: blur(10px);
 }
 
-.topbar-left,
-.topbar-right {
+.topbar-left, .topbar-right {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -143,10 +137,7 @@ select:focus-visible {
   color: var(--text);
   border-radius: var(--radius-sm);
 }
-
-.topbar-btn:hover {
-  background: rgba(255, 255, 255, 0.10);
-}
+.topbar-btn:hover { background: rgba(255, 255, 255, 0.10); }
 
 .topbar-link {
   font-size: 13px;
@@ -154,21 +145,18 @@ select:focus-visible {
   padding: 6px 10px;
   border-radius: var(--radius-sm);
 }
-
 .topbar-link:hover {
   background: rgba(255, 255, 255, 0.07);
   text-decoration: none;
   color: var(--text);
 }
 
-/* Body split: side nav + main content */
 .app-body {
   flex: 1;
-  min-height: 0; /* critical for proper scrolling */
+  min-height: 0;
   display: flex;
 }
 
-/* Side nav */
 .app-sidenav {
   width: var(--nav-w);
   flex: 0 0 var(--nav-w);
@@ -179,7 +167,6 @@ select:focus-visible {
   overflow: auto;
 }
 
-/* Collapse behavior */
 .nav-collapsed .app-sidenav {
   width: var(--nav-w-collapsed);
   flex-basis: var(--nav-w-collapsed);
@@ -193,9 +180,7 @@ select:focus-visible {
   margin: 4px 0 12px;
 }
 
-.sidenav-section {
-  margin-bottom: 12px;
-}
+.sidenav-section { margin-bottom: 12px; }
 
 .sidenav-section-title {
   font-size: 11px;
@@ -218,13 +203,11 @@ select:focus-visible {
   color: var(--muted);
   border: 1px solid transparent;
 }
-
 .sidenav-item:hover {
   background: rgba(255, 255, 255, 0.07);
   color: var(--text);
   text-decoration: none;
 }
-
 .sidenav-item.active {
   background: rgba(96, 165, 250, 0.16);
   border-color: rgba(96, 165, 250, 0.40);
@@ -246,20 +229,16 @@ select:focus-visible {
   background: rgba(96, 165, 250, 0.16);
 }
 
-/* Hide text-only elements when collapsed */
 .nav-collapsed .sidenav-title,
 .nav-collapsed .sidenav-section-title,
 .nav-collapsed .sidenav-item-label,
-.nav-collapsed .sidenav-footer {
-  display: none;
-}
+.nav-collapsed .sidenav-footer { display: none; }
 
 .sidenav-footer {
   margin-top: 14px;
   color: var(--faint);
 }
 
-/* Main content */
 .app-content {
   flex: 1;
   min-width: 0;
@@ -269,12 +248,23 @@ select:focus-visible {
 }
 
 /* ============================================================
-   Generic UI Controls (toolbars look consistent)
+   Common UI helpers used by pages
    ============================================================ */
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 14px;
+}
 
-input[type="text"],
-input[type="search"],
-select {
+.kicker {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.input {
   height: 34px;
   border-radius: var(--radius-sm);
   border: 1px solid var(--border);
@@ -282,10 +272,7 @@ select {
   color: var(--text);
   padding: 0 10px;
 }
-
-input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
-}
+.input::placeholder { color: rgba(255, 255, 255, 0.45); }
 
 .btn {
   height: 34px;
@@ -295,38 +282,27 @@ input::placeholder {
   background: rgba(255, 255, 255, 0.07);
   color: var(--text);
 }
+.btn:hover { background: rgba(255, 255, 255, 0.10); }
+.btn:disabled { opacity: 0.6; cursor: not-allowed; }
 
-.btn:hover {
-  background: rgba(255, 255, 255, 0.10);
-}
-
+/* Optional primary (use on Load Projects if desired) */
 .btn-primary {
   border-color: rgba(59, 130, 246, 0.55);
   background: rgba(59, 130, 246, 0.22);
 }
+.btn-primary:hover { background: rgba(59, 130, 246, 0.30); }
 
-.btn-primary:hover {
-  background: rgba(59, 130, 246, 0.30);
-}
-
-/* ============================================================
-   Responsive - collapse nav automatically on smaller widths
-   ============================================================ */
+/* Responsive */
 @media (max-width: 860px) {
   .app-sidenav {
     width: var(--nav-w-collapsed);
     flex-basis: var(--nav-w-collapsed);
     padding: 10px;
   }
-
   .sidenav-title,
   .sidenav-section-title,
   .sidenav-item-label,
-  .sidenav-footer {
-    display: none;
-  }
+  .sidenav-footer { display: none; }
 
-  .topbar-location {
-    max-width: 34vw;
-  }
+  .topbar-location { max-width: 34vw; }
 }
