@@ -3,7 +3,8 @@ import { AgGridReact } from "ag-grid-react";
 import type { ColDef } from "ag-grid-community";
 import { apiGet } from "../api/client";
 
-const API_BASE = "/api";
+// Option A: call the Function App host directly (no SWA /api rewrite)
+const API_HOST = (import.meta.env.VITE_API_BASE_URL ?? "").toString().replace(/\/+$/, "");
 
 type ProjectDto = {
   projectId: string;
@@ -44,7 +45,9 @@ export default function EstimatesPage() {
         filter: true,
         width: 140,
         valueFormatter: (p) =>
-          typeof p.value === "number" ? p.value.toLocaleString(undefined, { style: "currency", currency: "CAD" }) : "",
+          typeof p.value === "number"
+            ? p.value.toLocaleString(undefined, { style: "currency", currency: "CAD" })
+            : "",
       },
       { headerName: "Updated (UTC)", field: "updatedUtc", sortable: true, filter: true, width: 190 },
     ],
@@ -55,10 +58,14 @@ export default function EstimatesPage() {
     setBusy(true);
     setError("");
     try {
-      // Load both sets
+      if (!API_HOST) {
+        throw new Error("VITE_API_BASE_URL is not set (should be your Function App host).");
+      }
+
+      // Load both sets from the Function App host
       const [estimates, projects] = await Promise.all([
-        apiGet<EstimateDto[]>(`${API_BASE}/estimates`),
-        apiGet<ProjectDto[]>(`${API_BASE}/projects`),
+        apiGet<EstimateDto[]>("/estimates", { baseUrl: API_HOST }),
+        apiGet<ProjectDto[]>("/projects", { baseUrl: API_HOST }),
       ]);
 
       const projectMap = new Map<string, string>();
@@ -85,7 +92,15 @@ export default function EstimatesPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 12, height: "100%", minHeight: 0 }}>
       <div className="panel" style={{ padding: 14 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            gap: 12,
+            flexWrap: "wrap",
+          }}
+        >
           <div style={{ minWidth: 260 }}>
             <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 6 }}>Estimates</div>
             <div className="kicker">
@@ -101,6 +116,7 @@ export default function EstimatesPage() {
               placeholder="Filter…"
               style={{ width: 220 }}
             />
+
             <button className="btn btn-primary" onClick={refresh} disabled={busy}>
               Load Estimates
             </button>
