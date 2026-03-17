@@ -1,3 +1,10 @@
+/* ============================================================
+   PEG Portal - Base UI + Layout Shell
+   - Builds on your existing tokens/background
+   - Adds topbar + sidenav + content layout
+   - Supports .nav-collapsed (from App.tsx)
+   ============================================================ */
+
 :root {
   color-scheme: light dark;
   font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
@@ -7,40 +14,321 @@
 
   --bg0: #0b1220;
   --bg1: #0e172a;
+
   --panel: rgba(255, 255, 255, 0.06);
   --panel2: rgba(255, 255, 255, 0.08);
   --border: rgba(255, 255, 255, 0.10);
+
   --text: rgba(255, 255, 255, 0.92);
   --muted: rgba(255, 255, 255, 0.62);
+  --faint: rgba(255, 255, 255, 0.48);
+
   --accent: #3b82f6;
   --accent2: #60a5fa;
+
+  /* Layout tokens */
+  --topbar-h: 52px;
+  --nav-w: 260px;
+  --nav-w-collapsed: 72px;
+  --pad: 14px;
+  --gap: 12px;
+
+  --radius: 14px;
+  --radius-sm: 10px;
+
+  --shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  --focus: 0 0 0 3px rgba(96, 165, 250, 0.35);
 }
 
+/* Full-height app */
 html, body, #root {
   height: 100%;
   width: 100%;
   margin: 0;
 }
 
+/* Your background (kept) */
 body {
-  /* IMPORTANT: no flex centering */
   display: block;
-
-  background: radial-gradient(1200px 600px at 20% 0%, rgba(59, 130, 246, 0.22), transparent 60%),
-              radial-gradient(900px 500px at 90% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
-              linear-gradient(180deg, var(--bg0), var(--bg1));
+  background:
+    radial-gradient(1200px 600px at 20% 0%, rgba(59, 130, 246, 0.22), transparent 60%),
+    radial-gradient(900px 500px at 90% 20%, rgba(99, 102, 241, 0.18), transparent 55%),
+    linear-gradient(180deg, var(--bg0), var(--bg1));
   color: var(--text);
 }
 
+/* Root should not be centered like Vite template */
 #root {
-  /* IMPORTANT: override any Vite template centering */
   max-width: none;
   padding: 0;
   text-align: left;
 }
 
-* { box-sizing: border-box; }
+/* Baseline reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
 
 a { color: inherit; text-decoration: none; }
+a:hover { text-decoration: underline; }
 
 button, input, select { font: inherit; }
+button { cursor: pointer; }
+
+/* Accessibility */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+  border-radius: var(--radius-sm);
+}
+
+/* ============================================================
+   App Shell Layout
+   Classes already used in App.tsx:
+   .app-root .app-topbar .app-body .app-sidenav .app-content
+   ============================================================ */
+
+.app-root {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* Topbar */
+.app-topbar {
+  height: var(--topbar-h);
+  flex: 0 0 var(--topbar-h);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--pad);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.04));
+  border-bottom: 1px solid var(--border);
+  backdrop-filter: blur(10px);
+}
+
+.topbar-left,
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.topbar-location {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 48vw;
+}
+
+.topbar-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+  display: inline-block;
+}
+
+.topbar-btn {
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  border-radius: var(--radius-sm);
+}
+
+.topbar-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.topbar-link {
+  font-size: 13px;
+  color: var(--muted);
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+}
+
+.topbar-link:hover {
+  background: rgba(255, 255, 255, 0.07);
+  text-decoration: none;
+  color: var(--text);
+}
+
+/* Body split: side nav + main content */
+.app-body {
+  flex: 1;
+  min-height: 0; /* critical for proper scrolling */
+  display: flex;
+}
+
+/* Side nav */
+.app-sidenav {
+  width: var(--nav-w);
+  flex: 0 0 var(--nav-w);
+  padding: var(--pad);
+  border-right: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  backdrop-filter: blur(10px);
+  overflow: auto;
+}
+
+/* Collapse behavior (App.tsx toggles .nav-collapsed on .app-root) */
+.nav-collapsed .app-sidenav {
+  width: var(--nav-w-collapsed);
+  flex-basis: var(--nav-w-collapsed);
+  padding: 10px;
+}
+
+.sidenav-title {
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  color: var(--faint);
+  margin: 4px 0 12px;
+}
+
+.sidenav-section {
+  margin-bottom: 12px;
+}
+
+.sidenav-section-title {
+  font-size: 11px;
+  color: var(--faint);
+  margin: 10px 0 8px;
+}
+
+.sidenav-section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.sidenav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+  border-radius: 12px;
+  color: var(--muted);
+  border: 1px solid transparent;
+}
+
+.sidenav-item:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  text-decoration: none;
+}
+
+.sidenav-item.active {
+  background: rgba(96, 165, 250, 0.16);
+  border-color: rgba(96, 165, 250, 0.40);
+  color: var(--text);
+}
+
+.sidenav-item-label {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sidenav-item-badge {
+  margin-left: auto;
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(96, 165, 250, 0.45);
+  background: rgba(96, 165, 250, 0.16);
+}
+
+/* Hide text-only elements when collapsed */
+.nav-collapsed .sidenav-title,
+.nav-collapsed .sidenav-section-title,
+.nav-collapsed .sidenav-item-label,
+.nav-collapsed .sidenav-footer {
+  display: none;
+}
+
+.sidenav-footer {
+  margin-top: 14px;
+  color: var(--faint);
+}
+
+/* Main content */
+.app-content {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 18px;
+  overflow: auto;
+}
+
+/* ============================================================
+   Generic UI Controls (helps toolbars look consistent)
+   ============================================================ */
+
+input[type="text"],
+input[type="search"],
+select {
+  height: 34px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  padding: 0 10px;
+}
+
+input::placeholder {
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.btn {
+  height: 34px;
+  padding: 0 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+}
+
+.btn-primary {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.22);
+}
+
+.btn-primary:hover {
+  background: rgba(59, 130, 246, 0.30);
+}
+
+/* ============================================================
+   Responsive - collapse nav automatically on smaller widths
+   ============================================================ */
+@media (max-width: 860px) {
+  .app-sidenav {
+    width: var(--nav-w-collapsed);
+    flex-basis: var(--nav-w-collapsed);
+    padding: 10px;
+  }
+
+  .sidenav-title,
+  .sidenav-section-title,
+  .sidenav-item-label,
+  .sidenav-footer {
+    display: none;
+  }
+
+  .topbar-location {
+    max-width: 34vw;
+  }
+}
